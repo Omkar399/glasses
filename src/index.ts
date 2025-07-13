@@ -217,9 +217,9 @@ class HeyMentraVoiceAssistant extends AppServer {
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0a0a0a;
+            background: #f8f9fa;
             min-height: 100vh;
-            color: #ffffff;
+            color: #212529;
             overflow-x: hidden;
         }
         
@@ -233,12 +233,13 @@ class HeyMentraVoiceAssistant extends AppServer {
         
         /* Header with device status */
         .header {
-            background: #1a1a1a;
+            background: #ffffff;
             padding: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid #2a2a2a;
+            border-bottom: 1px solid #e9ecef;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
         
         .device-status {
@@ -246,17 +247,17 @@ class HeyMentraVoiceAssistant extends AppServer {
             align-items: center;
             gap: 10px;
             font-size: 0.9rem;
-            color: #888;
+            color: #6c757d;
         }
         
         .device-status.connected {
-            color: #4CAF50;
+            color: #28a745;
         }
         
         .settings-btn {
             background: none;
             border: none;
-            color: #888;
+            color: #6c757d;
             font-size: 1.5rem;
             cursor: pointer;
         }
@@ -274,12 +275,13 @@ class HeyMentraVoiceAssistant extends AppServer {
             bottom: 0;
             left: 0;
             right: 0;
-            background: #1a1a1a;
-            border-top: 1px solid #2a2a2a;
+            background: #ffffff;
+            border-top: 1px solid #e9ecef;
             display: flex;
             justify-content: space-around;
             padding: 10px 0;
             z-index: 1000;
+            box-shadow: 0 -2px 4px rgba(0,0,0,0.05);
         }
         
         .nav-item {
@@ -290,14 +292,14 @@ class HeyMentraVoiceAssistant extends AppServer {
             padding: 10px;
             border: none;
             background: none;
-            color: #666;
+            color: #6c757d;
             font-size: 0.75rem;
             cursor: pointer;
             transition: color 0.3s;
         }
         
         .nav-item.active {
-            color: #ffffff;
+            color: #007bff;
         }
         
         .nav-icon {
@@ -306,16 +308,18 @@ class HeyMentraVoiceAssistant extends AppServer {
         
         /* Card styles for conversations */
         .card {
-            background: #1a1a1a;
+            background: #ffffff;
             border-radius: 16px;
             padding: 16px;
             margin-bottom: 12px;
-            border: 1px solid #2a2a2a;
+            border: 1px solid #e9ecef;
             transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
         
         .card:hover {
-            background: #222;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transform: translateY(-1px);
         }
         
         .card-header {
@@ -330,10 +334,11 @@ class HeyMentraVoiceAssistant extends AppServer {
             align-items: center;
             gap: 8px;
             padding: 6px 12px;
-            background: #2a2a2a;
+            background: #f8f9fa;
             border-radius: 20px;
             font-size: 0.85rem;
-            color: #888;
+            color: #6c757d;
+            border: 1px solid #e9ecef;
         }
         
         .category-icon {
@@ -342,32 +347,33 @@ class HeyMentraVoiceAssistant extends AppServer {
         
         .time-badge {
             font-size: 0.85rem;
-            color: #666;
+            color: #adb5bd;
         }
         
         .card-title {
             font-size: 1.1rem;
             font-weight: 600;
             margin-bottom: 8px;
-            color: #fff;
+            color: #212529;
         }
         
         .card-description {
             font-size: 0.95rem;
-            color: #888;
+            color: #6c757d;
             line-height: 1.5;
         }
         
         /* Recording status */
         .recording-status {
-            background: #1a1a1a;
+            background: #ffffff;
             border-radius: 16px;
             padding: 20px;
             margin-bottom: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border: 1px solid #2a2a2a;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
         
         .recording-btn {
@@ -387,7 +393,7 @@ class HeyMentraVoiceAssistant extends AppServer {
             display: flex;
             align-items: center;
             gap: 8px;
-            color: #888;
+            color: #6c757d;
         }
         
         .listening-dot {
@@ -407,11 +413,11 @@ class HeyMentraVoiceAssistant extends AppServer {
         
         .search-bar {
             flex: 1;
-            background: #1a1a1a;
-            border: 1px solid #2a2a2a;
+            background: #ffffff;
+            border: 1px solid #dee2e6;
             border-radius: 12px;
             padding: 12px 16px;
-            color: white;
+            color: #212529;
             font-size: 1rem;
             display: flex;
             align-items: center;
@@ -423,20 +429,20 @@ class HeyMentraVoiceAssistant extends AppServer {
             background: none;
             border: none;
             outline: none;
-            color: white;
+            color: #212529;
             font-size: 1rem;
         }
         
         .search-bar input::placeholder {
-            color: #666;
+            color: #adb5bd;
         }
         
         .filter-btn {
-            background: #1a1a1a;
-            border: 1px solid #2a2a2a;
+            background: #ffffff;
+            border: 1px solid #dee2e6;
             border-radius: 12px;
             padding: 12px;
-            color: #888;
+            color: #6c757d;
             cursor: pointer;
             font-size: 1.2rem;
         }
@@ -446,7 +452,7 @@ class HeyMentraVoiceAssistant extends AppServer {
             font-size: 1.2rem;
             font-weight: 600;
             margin: 20px 0 10px;
-            color: #fff;
+            color: #212529;
         }
         
         /* Map container */
@@ -466,31 +472,32 @@ class HeyMentraVoiceAssistant extends AppServer {
         }
         
         .stat-card {
-            background: #1a1a1a;
+            background: #ffffff;
             border-radius: 12px;
             padding: 16px;
             text-align: center;
-            border: 1px solid #2a2a2a;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
         
         .stat-value {
             font-size: 2rem;
             font-weight: bold;
-            color: #fff;
+            color: #212529;
         }
         
         .stat-label {
             font-size: 0.85rem;
-            color: #666;
+            color: #6c757d;
             margin-top: 4px;
         }
         
         .live-transcript {
-            background: #1a1a1a;
+            background: #e7f3ff;
             border-radius: 12px;
             padding: 16px;
             margin-bottom: 20px;
-            border: 1px solid #2a2a2a;
+            border: 1px solid #bee5eb;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -498,7 +505,7 @@ class HeyMentraVoiceAssistant extends AppServer {
         
         .transcript-text {
             flex: 1;
-            color: #fff;
+            color: #0c5460;
             font-size: 1rem;
         }
         
@@ -525,14 +532,14 @@ class HeyMentraVoiceAssistant extends AppServer {
         .loading {
             text-align: center;
             padding: 40px;
-            color: #666;
+            color: #6c757d;
         }
         
         .spinner {
             width: 40px;
             height: 40px;
-            border: 4px solid #2a2a2a;
-            border-top: 4px solid #fff;
+            border: 4px solid #e9ecef;
+            border-top: 4px solid #007bff;
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin: 0 auto 20px;
@@ -541,11 +548,11 @@ class HeyMentraVoiceAssistant extends AppServer {
         .empty-state {
             text-align: center;
             padding: 60px 20px;
-            color: #666;
+            color: #6c757d;
         }
         
         .empty-state h3 {
-            color: #888;
+            color: #495057;
             margin-bottom: 10px;
         }
         
