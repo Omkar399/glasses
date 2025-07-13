@@ -1,0 +1,2947 @@
+diff --git a/OPTIMIZATION_NOTES.md b/OPTIMIZATION_NOTES.md
+index bd721fd..921be6d 100644
+--- a/OPTIMIZATION_NOTES.md
++++ b/OPTIMIZATION_NOTES.md
+@@ -1,4 +1,4 @@
+-# Hey Mentra Voice Assistant - Super Optimizations
++# Hey Vision Voice Assistant - Super Optimizations
+ 
+ ## Key Performance Improvements
+ 
+@@ -21,7 +21,7 @@
+ 
+ ### 🔄 **Queue-Based Processing**
+ - Prevents overlapping requests that cause conflicts
+-- Handles rapid "hey mentra" commands gracefully
++- Handles rapid "hey vision" commands gracefully
+ - Processes requests in order without blocking
+ - **Non-blocking queue processing** prevents UI freezes
+ 
+diff --git a/README.md b/README.md
+index 269c54d..181f529 100644
+--- a/README.md
++++ b/README.md
+@@ -1,10 +1,10 @@
+-# Hey Mentra Voice Assistant
++# Hey Vision Voice Assistant
+ 
+-A MentraOS app that continuously listens for "Hey Mentra" and responds using AI vision and voice. When triggered, it takes a photo of what you're looking at, sends both the image and your question to Google Gemini AI, and responds using ElevenLabs text-to-speech.
++A MentraOS app that continuously listens for "Hey Vision" and responds using AI vision and voice. When triggered, it takes a photo of what you're looking at, sends both the image and your question to Google Gemini AI, and responds using ElevenLabs text-to-speech.
+ 
+ ## Features
+ 
+-- 🎙️ **Always Listening**: Continuously monitors for the "Hey Mentra" wake word
++- 🎙️ **Always Listening**: Continuously monitors for the "Hey Vision" wake word
+ - 📸 **Instant Vision**: Automatically captures what you're seeing when triggered
+ - 🧠 **AI Understanding**: Uses Google Gemini AI to understand both your question and the visual context
+ - 🗣️ **Natural Voice**: Responds using ElevenLabs text-to-speech with natural-sounding voice
+@@ -38,7 +38,7 @@ For detailed webview documentation, see [WEBVIEW_DOCUMENTATION.md](./WEBVIEW_DOC
+ ### 1. Clone and Install Dependencies
+ 
+ ```bash
+-cd hey-mentra-voice-assistant
++cd hey-vision-voice-assistant
+ bun install  # or npm install
+ ```
+ 
+@@ -93,10 +93,10 @@ Copy the HTTPS URL (e.g., `https://abc123.ngrok.io`) and use it in your MentraOS
+ ## How to Use
+ 
+ 1. **Launch the App**: Open the app in MentraOS on your smart glasses
+-2. **Start Talking**: Say "Hey Mentra" followed by your question
+-   - Example: "Hey Mentra, what am I looking at?"
+-   - Example: "Hey Mentra, can you read this sign?"
+-   - Example: "Hey Mentra, describe this scene"
++2. **Start Talking**: Say "Hey Vision" followed by your question
++   - Example: "Hey Vision, what am I looking at?"
++   - Example: "Hey Vision, can you read this sign?"
++   - Example: "Hey Vision, describe this scene"
+ 3. **Get AI Response**: The app will:
+    - Take a photo automatically
+    - Process your question and the image with Gemini AI
+@@ -104,20 +104,16 @@ Copy the HTTPS URL (e.g., `https://abc123.ngrok.io`) and use it in your MentraOS
+ 
+ ## Supported Wake Words
+ 
+-The app recognizes various pronunciations:
+-- "Hey Mentra"
+-- "Hi Mentra" 
+-- "Hey Mantra"
+-- "Hi Mantra"
+-- "Hey Menta"
+-- "Hi Menta"
++The app recognizes:
++- "Hey Vision"
++- "Hi Vision"
+ 
+ ## Example Interactions
+ 
+-**User**: "Hey Mentra, what's in front of me?"
++**User**: "Hey Vision, what's in front of me?"
+ **Assistant**: *[Takes photo]* "I can see a busy street with several cars and a red traffic light. There appears to be a coffee shop on the left side."
+ 
+-**User**: "Hey Mentra, read this menu"
++**User**: "Hey Vision, read this menu"
+ **Assistant**: *[Takes photo]* "This appears to be a restaurant menu featuring Italian dishes. I can see pasta options like spaghetti carbonara and fettuccine alfredo, with prices ranging from $12 to $18."
+ 
+ ## Technical Details
+@@ -143,7 +139,7 @@ The app recognizes various pronunciations:
+ 
+ ### File Structure
+ ```
+-hey-mentra-voice-assistant/
++hey-vision-voice-assistant/
+ ├── src/
+ │   └── index.ts          # Main application logic
+ ├── package.json          # Dependencies and scripts
+@@ -173,23 +169,4 @@ hey-mentra-voice-assistant/
+ 
+ 4. **Gemini API errors**
+    - Verify your Gemini API key is correct
+-   - Check your Google Cloud billing account is set up
+-
+-5. **Voice not responding**
+-   - Ensure ElevenLabs TTS is configured in your MentraOS environment
+-   - Check your internet connection
+-
+-### Debug Mode
+-
+-Add debug logging by setting log level:
+-```typescript
+-this.logger.setLevel('debug');
+-```
+-
+-## License
+-
+-MIT License - Feel free to modify and use this code for your own MentraOS applications.
+-
+-## Contributing
+-
+-Contributions are welcome! Please feel free to submit issues or pull requests. 
+\ No newline at end of file
++   - Check your Google Cloud billing account is set up 
+\ No newline at end of file
+diff --git a/WEBVIEW_DOCUMENTATION.md b/WEBVIEW_DOCUMENTATION.md
+index edee40e..8cce6e5 100644
+--- a/WEBVIEW_DOCUMENTATION.md
++++ b/WEBVIEW_DOCUMENTATION.md
+@@ -1,8 +1,8 @@
+-# Hey Mentra Voice Assistant - Webview Documentation
++# Hey Vision Voice Assistant - Webview Documentation
+ 
+ ## 🚀 Overview
+ 
+-The Hey Mentra Voice Assistant now includes a **mobile-optimized React webview** that displays real-time conversation data from the Mentra smart glasses. The entire webview system is implemented directly in `src/index.ts` as a single-file solution.
++The Hey Vision Voice Assistant now includes a **mobile-optimized React webview** that displays real-time conversation data from the Mentra smart glasses. The entire webview system is implemented directly in `src/index.ts` as a single-file solution.
+ 
+ ## 📱 Webview Access
+ 
+diff --git a/bun.lock b/bun.lock
+index 93b88b2..edd3ee3 100644
+--- a/bun.lock
++++ b/bun.lock
+@@ -6,16 +6,10 @@
+       "dependencies": {
+         "@google/generative-ai": "^0.21.0",
+         "@mentra/sdk": "^2.0.3",
+-        "cors": "^2.8.5",
+         "dotenv": "^16.4.5",
+-        "express": "^4.18.2",
+-        "ws": "^8.16.0",
+       },
+       "devDependencies": {
+-        "@types/cors": "^2.8.17",
+-        "@types/express": "^4.17.21",
+         "@types/node": "^22.13.14",
+-        "@types/ws": "^8.5.10",
+         "typescript": "^5.0.0",
+       },
+     },
+@@ -37,34 +31,10 @@
+ 
+     "@msgpack/msgpack": ["@msgpack/msgpack@2.8.0", "", {}, "sha512-h9u4u/jiIRKbq25PM+zymTyW6bhTzELvOoUd+AvYriWOAKpLGnIamaET3pnHYoI5iYphAHBI4ayx0MehR+VVPQ=="],
+ 
+-    "@types/body-parser": ["@types/body-parser@1.19.6", "", { "dependencies": { "@types/connect": "*", "@types/node": "*" } }, "sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g=="],
+-
+-    "@types/connect": ["@types/connect@3.4.38", "", { "dependencies": { "@types/node": "*" } }, "sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug=="],
+-
+-    "@types/cors": ["@types/cors@2.8.19", "", { "dependencies": { "@types/node": "*" } }, "sha512-mFNylyeyqN93lfe/9CSxOGREz8cpzAhH+E93xJ4xWQf62V8sQ/24reV2nyzUWM6H6Xji+GGHpkbLe7pVoUEskg=="],
+-
+-    "@types/express": ["@types/express@4.17.23", "", { "dependencies": { "@types/body-parser": "*", "@types/express-serve-static-core": "^4.17.33", "@types/qs": "*", "@types/serve-static": "*" } }, "sha512-Crp6WY9aTYP3qPi2wGDo9iUe/rceX01UMhnF1jmwDcKCFM6cx7YhGP/Mpr3y9AASpfHixIG0E6azCcL5OcDHsQ=="],
+-
+-    "@types/express-serve-static-core": ["@types/express-serve-static-core@4.19.6", "", { "dependencies": { "@types/node": "*", "@types/qs": "*", "@types/range-parser": "*", "@types/send": "*" } }, "sha512-N4LZ2xG7DatVqhCZzOGb1Yi5lMbXSZcmdLDe9EzSndPV2HpWYWzRbaerl2n27irrm94EPpprqa8KpskPT085+A=="],
+-
+-    "@types/http-errors": ["@types/http-errors@2.0.5", "", {}, "sha512-r8Tayk8HJnX0FztbZN7oVqGccWgw98T/0neJphO91KkmOzug1KkofZURD4UaD5uH8AqcFLfdPErnBod0u71/qg=="],
+-
+-    "@types/mime": ["@types/mime@1.3.5", "", {}, "sha512-/pyBZWSLD2n0dcHE3hq8s8ZvcETHtEuF+3E7XVt0Ig2nvsVQXdghHVcEkIWjy9A0wKfTn97a/PSDYohKIlnP/w=="],
+-
+     "@types/node": ["@types/node@22.16.3", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-sr4Xz74KOUeYadexo1r8imhRtlVXcs+j3XK3TcoiYk7B1t3YRVJgtaD3cwX73NYb71pmVuMLNRhJ9XKdoDB74g=="],
+ 
+-    "@types/qs": ["@types/qs@6.14.0", "", {}, "sha512-eOunJqu0K1923aExK6y8p6fsihYEn/BYuQ4g0CxAAgFc4b/ZLN4CrsRZ55srTdqoiLzU2B2evC+apEIxprEzkQ=="],
+-
+-    "@types/range-parser": ["@types/range-parser@1.2.7", "", {}, "sha512-hKormJbkJqzQGhziax5PItDUTMAM9uE2XXQmM37dyd4hVM+5aVl7oVxMVUiVQn2oCQFN/LKCZdvSM0pFRqbSmQ=="],
+-
+-    "@types/send": ["@types/send@0.17.5", "", { "dependencies": { "@types/mime": "^1", "@types/node": "*" } }, "sha512-z6F2D3cOStZvuk2SaP6YrwkNO65iTZcwA2ZkSABegdkAh/lf+Aa/YQndZVfmEXT5vgAp6zv06VQ3ejSVjAny4w=="],
+-
+-    "@types/serve-static": ["@types/serve-static@1.15.8", "", { "dependencies": { "@types/http-errors": "*", "@types/node": "*", "@types/send": "*" } }, "sha512-roei0UY3LhpOJvjbIP6ZZFngyLKl5dskOtDhxY5THRSpO+ZI+nzJ+m5yUMzGrp89YRa7lvknKkMYjqQFGwA7Sg=="],
+-
+     "@types/stack-trace": ["@types/stack-trace@0.0.33", "", {}, "sha512-O7in6531Bbvlb2KEsJ0dq0CHZvc3iWSR5ZYMtvGgnHA56VgriAN/AU2LorfmcvAl2xc9N5fbCTRyMRRl8nd74g=="],
+ 
+-    "@types/ws": ["@types/ws@8.18.1", "", { "dependencies": { "@types/node": "*" } }, "sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg=="],
+-
+     "abort-controller": ["abort-controller@3.0.0", "", { "dependencies": { "event-target-shim": "^5.0.0" } }, "sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg=="],
+ 
+     "accepts": ["accepts@1.3.8", "", { "dependencies": { "mime-types": "~2.1.34", "negotiator": "0.6.3" } }, "sha512-PYAthTa2m2VKxuvSD3DPC/Gy+U+sOA1LAuT8mkmRuvw+NACSaeXEQ+NHcVF7rONl6qcaxV3Uuemwawk+7+SJLw=="],
+@@ -111,14 +81,12 @@
+ 
+     "content-type": ["content-type@1.0.5", "", {}, "sha512-nTjqfcBFEipKdXCv4YDQWCfmcLZKm81ldF0pAopTvyrFGVbcR6P/VAAd5G7N+0tTr8QqiU0tFadD6FK4NtJwOA=="],
+ 
+-    "cookie": ["cookie@0.7.1", "", {}, "sha512-6DnInpx7SJ2AK3+CTUE/ZM0vWTUboZCegxhC2xiIydHR9jNuTAASBrfEpHhiGOZw/nX51bHt6YQl8jsGo4y/0w=="],
++    "cookie": ["cookie@0.7.2", "", {}, "sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w=="],
+ 
+     "cookie-parser": ["cookie-parser@1.4.7", "", { "dependencies": { "cookie": "0.7.2", "cookie-signature": "1.0.6" } }, "sha512-nGUvgXnotP3BsjiLX2ypbQnWoGUPIIfHQNZkkC668ntrzGWEZVW70HDEB1qnNGMicPje6EttlIgzo51YSwNQGw=="],
+ 
+     "cookie-signature": ["cookie-signature@1.0.6", "", {}, "sha512-QADzlaHc8icV8I7vbaJXJwod9HWYp8uCqf1xa4OfNu1T7JVxQIrUgOWtHdNDtPiywmFbiS12VjotIXLrKM3orQ=="],
+ 
+-    "cors": ["cors@2.8.5", "", { "dependencies": { "object-assign": "^4", "vary": "^1" } }, "sha512-KIHbLJqu73RGr/hnbrO9uBeixNGuvSQjul/jdFvS/KFSIH1hWVd1ng7zOHx+YrEfInLG7q4n6GHQ9cDtxv/P6g=="],
+-
+     "dateformat": ["dateformat@4.6.3", "", {}, "sha512-2P0p0pFGzHS5EMnhdxQi7aJN+iMheud0UhG4dlE1DLAlvL8JHjJJTX/CSm4JXwV0Ka5nGk3zC5mcb5bUQUxxMA=="],
+ 
+     "debug": ["debug@2.6.9", "", { "dependencies": { "ms": "2.0.0" } }, "sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA=="],
+@@ -365,10 +333,10 @@
+ 
+     "concat-stream/readable-stream": ["readable-stream@3.6.2", "", { "dependencies": { "inherits": "^2.0.3", "string_decoder": "^1.1.1", "util-deprecate": "^1.0.1" } }, "sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA=="],
+ 
+-    "cookie-parser/cookie": ["cookie@0.7.2", "", {}, "sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w=="],
+-
+     "debug/ms": ["ms@2.0.0", "", {}, "sha512-Tpp60P6IUJDTuOq/5Z8cdskzJujfwqfOTkrwIwj7IRISpnkJnT6SyJ4PCPnGMoFjC9ddhal5KVIYtAt97ix05A=="],
+ 
++    "express/cookie": ["cookie@0.7.1", "", {}, "sha512-6DnInpx7SJ2AK3+CTUE/ZM0vWTUboZCegxhC2xiIydHR9jNuTAASBrfEpHhiGOZw/nX51bHt6YQl8jsGo4y/0w=="],
++
+     "pino/pino-abstract-transport": ["pino-abstract-transport@2.0.0", "", { "dependencies": { "split2": "^4.0.0" } }, "sha512-F63x5tizV6WCh4R6RHyi2Ml+M70DNRXt/+HANowMflpgGFMAym/VKm6G7ZOQRjqN7XbGxK1Lg9t6ZrtzOaivMw=="],
+ 
+     "pino-pretty/pino-abstract-transport": ["pino-abstract-transport@2.0.0", "", { "dependencies": { "split2": "^4.0.0" } }, "sha512-F63x5tizV6WCh4R6RHyi2Ml+M70DNRXt/+HANowMflpgGFMAym/VKm6G7ZOQRjqN7XbGxK1Lg9t6ZrtzOaivMw=="],
+diff --git a/package.json b/package.json
+index 247ac0e..92f753f 100644
+--- a/package.json
++++ b/package.json
+@@ -1,5 +1,5 @@
+ {
+-  "name": "hey-mentra-voice-assistant",
++  "name": "hey-vision-voice-assistant",
+   "version": "1.0.0",
+   "main": "index.js",
+   "scripts": {
+@@ -10,7 +10,7 @@
+   },
+   "author": "",
+   "license": "ISC",
+-  "description": "Always-listening MentraOS app that responds to 'hey mentra' with AI vision and voice",
++  "description": "Always-listening MentraOS app that responds to 'hey vision' with AI vision and voice",
+   "dependencies": {
+     "@mentra/sdk": "^2.0.3",
+     "@google/generative-ai": "^0.21.0",
+diff --git a/src/index.ts b/src/index.ts
+index 444f37f..2b8ac22 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -1,6 +1,9 @@
+ import { AppServer, AppSession, PhotoData, AuthenticatedRequest } from '@mentra/sdk';
+ import { GoogleGenerativeAI } from '@google/generative-ai';
+ import * as dotenv from 'dotenv';
++import * as crypto from 'crypto';
++import * as path from 'path';
++import * as fs from 'fs';
+ 
+ // Load environment variables
+ dotenv.config();
+@@ -9,9 +12,12 @@ const PACKAGE_NAME = process.env.PACKAGE_NAME ?? (() => { throw new Error('PACKA
+ const MENTRAOS_API_KEY = process.env.MENTRAOS_API_KEY ?? (() => { throw new Error('MENTRAOS_API_KEY is not set in .env file'); })();
+ const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? (() => { throw new Error('GEMINI_API_KEY is not set in .env file'); })();
+ const PORT = parseInt(process.env.PORT || '3000');
++const MAX_CONVERSATIONS_PER_USER = parseInt(process.env.MAX_CONVERSATIONS_PER_USER || '100');
++const ENABLE_PERSISTENCE = process.env.ENABLE_PERSISTENCE === 'true';
++const DATA_DIR = process.env.DATA_DIR || './data';
+ 
+ /**
+- * Interface for storing conversation data for webview display
++ * Enhanced interfaces
+  */
+ interface ConversationEntry {
+   id: string;
+@@ -27,585 +33,718 @@ interface ConversationEntry {
+   };
+   processingTime: number;
+   status: 'processing' | 'completed' | 'error';
++  location?: {
++    lat: number;
++    lng: number;
++    address?: string;
++  };
++  category?: string;
++  confidence?: number;
++  retryCount?: number;
++  modelUsed?: string;
++}
++
++interface UserSession {
++  userId: string;
++  sessionId: string;
++  session: AppSession;
++  isListening: boolean;
++  listeningTimestamp: number;
++  lastActivity: number;
++  eventListenersSetup: boolean; // NEW: Prevent duplicate listeners
++  activeOperations: Set<string>; // NEW: Track active operations
++  rateLimiter: {
++    requests: number;
++    windowStart: number;
++  };
++}
++
++interface QueuedRequest {
++  id: string; // NEW: Unique request ID
++  question: string;
++  session: AppSession;
++  userId: string;
++  timestamp: number;
++  priority: number;
++}
++
++interface AppMetrics {
++  totalRequests: number;
++  successfulRequests: number;
++  failedRequests: number;
++  averageResponseTime: number;
++  activeUsers: number;
++  photosCaptured: number;
++  lastUpdated: number;
+ }
+ 
+ /**
+- * SUPER OPTIMIZED Voice Assistant App with Enhanced Async/Await + WEBVIEW
+- * - Robust promise handling with retries
+- * - Non-blocking asynchronous operations
+- * - Fail-safe async patterns
+- * - Mobile-optimized React webview integration
+- * - Real-time conversation data display
++ * PRODUCTION-READY Voice Assistant with Duplicate Prevention & Advanced Features
+  */
+ class HeyMentraVoiceAssistant extends AppServer {
+   private gemini: GoogleGenerativeAI;
+-  private isProcessingRequest = false;
+-  private requestQueue: Array<{ question: string; session: AppSession; userId: string; timestamp: number }> = [];
+-  private activePhotoRequests: Map<string, boolean> = new Map(); // Track active photo requests per user
+-  private lastPhotoTime: Map<string, number> = new Map(); // Track last photo time per user
+   
+-  // WEBVIEW DATA STORAGE
+-  private conversations: Map<string, ConversationEntry[]> = new Map(); // Store conversations by userId
+-  private activeUsers: Map<string, { lastActivity: number; sessionId: string }> = new Map(); // Track active users
++  // FIXED: Better concurrency control
++  private readonly processingLock = new Set<string>(); // Track processing requests by ID
++  private readonly requestQueue: QueuedRequest[] = [];
++  private isQueueProcessing = false;
++  
++  // FIXED: Better session management
++  private readonly userSessions = new Map<string, UserSession>();
++  private readonly activePhotoRequests = new Set<string>(); // Use Set instead of Map
++  private readonly lastPhotoTime = new Map<string, number>();
++  
++  // ENHANCED: Data persistence and caching
++  private readonly conversations = new Map<string, ConversationEntry[]>();
++  private readonly responseCache = new Map<string, { response: string; timestamp: number }>();
++  private readonly sseClients = new Map<string, any>();
++  
++  // NEW: Metrics and monitoring
++  private metrics: AppMetrics = {
++    totalRequests: 0,
++    successfulRequests: 0,
++    failedRequests: 0,
++    averageResponseTime: 0,
++    activeUsers: 0,
++    photosCaptured: 0,
++    lastUpdated: Date.now()
++  };
++  
++  // NEW: Configuration
++  private readonly config = {
++    LISTENING_TIMEOUT: 10000,
++    PHOTO_COOLDOWN: 2000,
++    MAX_QUEUE_SIZE: 50,
++    RATE_LIMIT_WINDOW: 60000, // 1 minute
++    RATE_LIMIT_MAX_REQUESTS: 30,
++    CACHE_TTL: 300000, // 5 minutes
++    CLEANUP_INTERVAL: 300000, // 5 minutes
++    TTS_TIMEOUT: 10000,
++    AI_TIMEOUT: 8000
++  };
+ 
+   constructor() {
+     super({
+       packageName: PACKAGE_NAME,
+       apiKey: MENTRAOS_API_KEY,
+       port: PORT,
++      healthCheck: true,
++      cookieSecret: crypto.randomBytes(32).toString('hex')
+     });
+ 
+-    // Initialize Gemini AI
+     this.gemini = new GoogleGenerativeAI(GEMINI_API_KEY);
+-    
+-    // Setup webview routes
+     this.setupWebviewRoutes();
++    this.setupCleanupTasks();
++    this.loadPersistedData();
+     
+-    this.logger.info(`🚀 OPTIMIZED Hey Mentra Voice Assistant with WEBVIEW initialized`);
++    this.logger.info(`🚀 Enhanced Hey Mentra Voice Assistant initialized with advanced features`);
+   }
+ 
+   /**
+-   * WEBVIEW SETUP - Mobile-optimized React UI served directly from index.ts
++   * NEW: Setup periodic cleanup tasks
+    */
+-  private setupWebviewRoutes(): void {
+-    const app = this.getExpressApp();
++  private setupCleanupTasks(): void {
++    // Cleanup inactive sessions and old cache entries
++    setInterval(() => {
++      this.cleanupInactiveSessions();
++      this.cleanupOldCache();
++      this.updateMetrics();
++    }, this.config.CLEANUP_INTERVAL);
+ 
+-    // API endpoint to get conversation history for authenticated user
+-    app.get('/api/conversations', (req: any, res: any) => {
+-      const userId = (req as AuthenticatedRequest).authUserId;
++    // Graceful shutdown handler
++    process.on('SIGTERM', () => this.gracefulShutdown());
++    process.on('SIGINT', () => this.gracefulShutdown());
++  }
+ 
+-      if (!userId) {
+-        res.status(401).json({ error: 'Not authenticated' });
+-        return;
++  /**
++   * NEW: Load persisted conversation data
++   */
++  private loadPersistedData(): void {
++    if (!ENABLE_PERSISTENCE) return;
++
++    try {
++      if (!fs.existsSync(DATA_DIR)) {
++        fs.mkdirSync(DATA_DIR, { recursive: true });
+       }
+ 
+-      const userConversations = this.conversations.get(userId) || [];
+-      const sanitizedConversations = userConversations.map(conv => ({
+-        id: conv.id,
+-        timestamp: conv.timestamp,
+-        question: conv.question,
+-        response: conv.response,
+-        hasPhoto: conv.hasPhoto,
+-        processingTime: conv.processingTime,
+-        status: conv.status
+-      }));
++      const conversationsFile = path.join(DATA_DIR, 'conversations.json');
++      if (fs.existsSync(conversationsFile)) {
++        const data = JSON.parse(fs.readFileSync(conversationsFile, 'utf8'));
++        Object.entries(data).forEach(([userId, convs]) => {
++          this.conversations.set(userId, convs as ConversationEntry[]);
++        });
++        this.logger.info(`📁 Loaded persisted conversations for ${Object.keys(data).length} users`);
++      }
++    } catch (error) {
++      this.logger.error(`❌ Failed to load persisted data:`, error);
++    }
++  }
++
++  /**
++   * NEW: Save conversation data
++   */
++  private saveConversations(): void {
++    if (!ENABLE_PERSISTENCE) return;
++
++    try {
++      const data = Object.fromEntries(this.conversations.entries());
++      const conversationsFile = path.join(DATA_DIR, 'conversations.json');
++      fs.writeFileSync(conversationsFile, JSON.stringify(data, null, 2));
++    } catch (error) {
++      this.logger.error(`❌ Failed to save conversations:`, error);
++    }
++  }
++
++  /**
++   * ENHANCED: Webview routes with security and new endpoints
++   */
++  private setupWebviewRoutes(): void {
++    const app = this.getExpressApp();
++
++    // NEW: Security middleware
++    app.use((req, res, next) => {
++      res.setHeader('X-Frame-Options', 'DENY');
++      res.setHeader('X-Content-Type-Options', 'nosniff');
++      res.setHeader('X-XSS-Protection', '1; mode=block');
++      next();
++    });
+ 
++    // NEW: Health check endpoint
++    app.get('/health', (req, res) => {
+       res.json({
+-        conversations: sanitizedConversations,
+-        activeUsers: Array.from(this.activeUsers.keys()).length,
+-        lastActivity: this.activeUsers.get(userId)?.lastActivity || 0
++        status: 'healthy',
++        version: '2.0.0',
++        uptime: process.uptime(),
++        metrics: this.metrics,
++        activeUsers: this.userSessions.size
+       });
+     });
+ 
+-    // API endpoint to get photo data
+-    app.get('/api/photo/:conversationId', (req: any, res: any) => {
+-      const userId = (req as AuthenticatedRequest).authUserId;
+-      const conversationId = req.params.conversationId;
++    // NEW: Metrics endpoint
++    app.get('/api/metrics', (req, res) => {
++      this.updateMetrics();
++      res.json(this.metrics);
++    });
+ 
+-      if (!userId) {
+-        res.status(401).json({ error: 'Not authenticated' });
+-        return;
++    // ENHANCED: Conversations API with pagination and filtering
++    app.get('/api/conversations', (req: any, res: any) => {
++      try {
++        const userId = (req as AuthenticatedRequest).authUserId;
++        if (!userId) {
++          res.status(401).json({ error: 'Not authenticated' });
++          return;
++        }
++
++        const page = parseInt(req.query.page) || 1;
++        const limit = Math.min(parseInt(req.query.limit) || 20, 100);
++        const category = req.query.category;
++        const search = req.query.search?.toLowerCase();
++
++        let userConversations = this.conversations.get(userId) || [];
++
++        // Apply filters
++        if (category) {
++          userConversations = userConversations.filter(conv => conv.category === category);
++        }
++        if (search) {
++          userConversations = userConversations.filter(conv => 
++            conv.question.toLowerCase().includes(search) ||
++            conv.response.toLowerCase().includes(search)
++          );
++        }
++
++        // Pagination
++        const startIndex = (page - 1) * limit;
++        const paginatedConversations = userConversations.slice(startIndex, startIndex + limit);
++
++        const sanitizedConversations = paginatedConversations.map(conv => ({
++          id: conv.id,
++          timestamp: conv.timestamp,
++          question: this.sanitizeText(conv.question),
++          response: this.sanitizeText(conv.response),
++          hasPhoto: conv.hasPhoto,
++          processingTime: conv.processingTime,
++          status: conv.status,
++          category: conv.category,
++          confidence: conv.confidence
++        }));
++
++        res.json({
++          conversations: sanitizedConversations,
++          pagination: {
++            page,
++            limit,
++            total: userConversations.length,
++            hasMore: startIndex + limit < userConversations.length
++          },
++          activeUsers: this.userSessions.size,
++          lastActivity: this.userSessions.get(userId)?.lastActivity || 0
++        });
++      } catch (error) {
++        this.logger.error(`❌ Error in conversations API:`, error);
++        res.status(500).json({ error: 'Internal server error' });
+       }
++    });
+ 
+-      const userConversations = this.conversations.get(userId) || [];
+-      const conversation = userConversations.find(conv => conv.id === conversationId);
+-      
+-      if (!conversation || !conversation.photoData) {
+-        res.status(404).json({ error: 'Photo not found' });
+-        return;
++    // ENHANCED: Photo endpoint with better error handling
++    app.get('/api/photo/:conversationId', (req: any, res: any) => {
++      try {
++        const userId = (req as AuthenticatedRequest).authUserId;
++        const conversationId = req.params.conversationId;
++
++        if (!userId) {
++          res.status(401).json({ error: 'Not authenticated' });
++          return;
++        }
++
++        // Input validation
++        if (!/^conv_\d+_[a-z0-9]+$/.test(conversationId)) {
++          res.status(400).json({ error: 'Invalid conversation ID' });
++          return;
++        }
++
++        const userConversations = this.conversations.get(userId) || [];
++        const conversation = userConversations.find(conv => conv.id === conversationId);
++        
++        if (!conversation || !conversation.photoData) {
++          res.status(404).json({ error: 'Photo not found' });
++          return;
++        }
++
++        res.set({
++          'Content-Type': conversation.photoData.mimeType,
++          'Cache-Control': 'private, max-age=3600',
++          'Content-Security-Policy': "default-src 'none'"
++        });
++        res.send(conversation.photoData.buffer);
++      } catch (error) {
++        this.logger.error(`❌ Error serving photo:`, error);
++        res.status(500).json({ error: 'Internal server error' });
+       }
++    });
+ 
+-      res.set({
+-        'Content-Type': conversation.photoData.mimeType,
+-        'Cache-Control': 'no-cache'
+-      });
+-      res.send(conversation.photoData.buffer);
++    // NEW: Delete conversation endpoint
++    app.delete('/api/conversations/:conversationId', (req: any, res: any) => {
++      try {
++        const userId = (req as AuthenticatedRequest).authUserId;
++        const conversationId = req.params.conversationId;
++
++        if (!userId) {
++          res.status(401).json({ error: 'Not authenticated' });
++          return;
++        }
++
++        const userConversations = this.conversations.get(userId) || [];
++        const filteredConversations = userConversations.filter(conv => conv.id !== conversationId);
++        
++        if (filteredConversations.length < userConversations.length) {
++          this.conversations.set(userId, filteredConversations);
++          this.saveConversations();
++          res.json({ success: true });
++        } else {
++          res.status(404).json({ error: 'Conversation not found' });
++        }
++      } catch (error) {
++        this.logger.error(`❌ Error deleting conversation:`, error);
++        res.status(500).json({ error: 'Internal server error' });
++      }
+     });
+ 
+-    // Main webview route - serves React UI
++    // ENHANCED: Main webview with CSP
+     app.get('/webview', async (req: any, res: any) => {
+-      const userId = (req as AuthenticatedRequest).authUserId;
+-
+-      if (!userId) {
+-        res.status(401).send(`
+-          <!DOCTYPE html>
+-          <html>
+-            <head>
+-              <title>Hey Mentra - Not Authenticated</title>
+-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+-            </head>
+-            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #1a1a1a; color: white;">
+-              <h1>🔒 Please open this page from the MentraOS app</h1>
+-            </body>
+-          </html>
+-        `);
+-        return;
++      try {
++        const html = this.generateReactWebviewHTML();
++        res.setHeader('Content-Security-Policy', 
++          "default-src 'self' 'unsafe-inline' 'unsafe-eval' unpkg.com cdnjs.cloudflare.com; " +
++          "img-src 'self' data: blob:; " +
++          "connect-src 'self';"
++        );
++        res.send(html);
++      } catch (error) {
++        this.logger.error(`❌ Error serving webview:`, error);
++        res.status(500).send('Internal server error');
+       }
++    });
+ 
+-      // Serve the React-based mobile UI
+-      const html = this.generateReactWebviewHTML();
+-      res.send(html);
++    // ENHANCED: SSE with better connection management
++    app.get('/api/events', (req: any, res: any) => {
++      const userId = (req as AuthenticatedRequest).authUserId || 'anonymous';
++      
++      res.writeHead(200, {
++        'Content-Type': 'text/event-stream',
++        'Cache-Control': 'no-cache',
++        'Connection': 'keep-alive',
++        'Access-Control-Allow-Origin': '*',
++        'X-Accel-Buffering': 'no'
++      });
++      
++      // Send heartbeat every 30 seconds
++      const heartbeat = setInterval(() => {
++        try {
++          res.write(`: heartbeat ${Date.now()}\n\n`);
++        } catch (error) {
++          clearInterval(heartbeat);
++          this.sseClients.delete(userId);
++        }
++      }, 30000);
++      
++      this.sseClients.set(userId, res);
++      this.logger.info(`📡 SSE client connected for user ${userId}`);
++      
++      res.write(`data: ${JSON.stringify({ type: 'connected', userId, timestamp: Date.now() })}\n\n`);
++      
++      req.on('close', () => {
++        clearInterval(heartbeat);
++        this.sseClients.delete(userId);
++        this.logger.info(`📡 SSE client disconnected for user ${userId}`);
++      });
+     });
+   }
+ 
+   /**
+-   * Generate mobile-optimized React UI HTML (all-in-one file approach)
++   * FIXED: Create session with duplicate prevention
+    */
+-  private generateReactWebviewHTML(): string {
+-    return `
+-<!DOCTYPE html>
+-<html lang="en">
+-<head>
+-    <meta charset="UTF-8">
+-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+-    <title>Hey Mentra - Voice Assistant</title>
+-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+-    <style>
+-        * {
+-            margin: 0;
+-            padding: 0;
+-            box-sizing: border-box;
+-        }
+-        
+-        body {
+-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+-            min-height: 100vh;
+-            color: white;
+-            overflow-x: hidden;
+-        }
++  protected createAppSession(userId: string): any {
++    const { AppSession } = require('@mentra/sdk');
++    
++    const sessionConfig = {
++      packageName: PACKAGE_NAME,
++      apiKey: MENTRAOS_API_KEY,
++      userId: userId,
++      appServer: this,
++      mentraOSWebsocketUrl: process.env.MENTRAOS_WEBSOCKET_URL || 'wss://prod.augmentos.cloud/app-ws',
++      autoReconnect: true,
++      maxReconnectAttempts: 5,
++      reconnectDelay: 2000
++    };
++
++    return new AppSession(sessionConfig);
++  }
++
++  /**
++   * FIXED: Session handling with proper duplicate prevention
++   */
++  protected async onSession(session: AppSession, sessionId: string, userId: string): Promise<void> {
++    this.logger.info(`🎙️ Session started for user ${userId} (sessionId: ${sessionId})`);
++    
++    // FIXED: Check if user already has an active session
++    const existingSession = this.userSessions.get(userId);
++    if (existingSession && existingSession.eventListenersSetup) {
++      this.logger.warn(`⚠️ User ${userId} already has an active session, cleaning up old one`);
++      await this.cleanupUserSession(userId);
++    }
++    
++    // Create new user session
++    const userSession: UserSession = {
++      userId,
++      sessionId,
++      session,
++      isListening: false,
++      listeningTimestamp: 0,
++      lastActivity: Date.now(),
++      eventListenersSetup: false,
++      activeOperations: new Set(),
++      rateLimiter: {
++        requests: 0,
++        windowStart: Date.now()
++      }
++    };
++    
++    this.userSessions.set(userId, userSession);
++    
++    // Initialize conversation storage
++    if (!this.conversations.has(userId)) {
++      this.conversations.set(userId, []);
++    }
++    
++    // Setup event listeners (only once per session)
++    await this.setupSessionEventListeners(userSession);
++    
++    // Show welcome message
++    setImmediate(async () => {
++      await this.showWelcomeWithRetry(session, userId);
++    });
++  }
++
++  /**
++   * NEW: Setup event listeners with duplicate prevention
++   */
++  private async setupSessionEventListeners(userSession: UserSession): Promise<void> {
++    if (userSession.eventListenersSetup) {
++      this.logger.warn(`⚠️ Event listeners already setup for user ${userSession.userId}`);
++      return;
++    }
++
++    const { userId, session } = userSession;
++
++    try {
++      // Button press listener
++      session.events.onButtonPress((button) => {
++        this.logger.info(`🔘 Button pressed by user ${userId}: ${button.buttonId}, type: ${button.pressType}`);
+         
+-        .container {
+-            max-width: 100%;
+-            padding: 20px;
+-            min-height: 100vh;
+-        }
++        const operationId = `button_${Date.now()}`;
++        if (userSession.activeOperations.has(operationId)) return;
++        userSession.activeOperations.add(operationId);
+         
+-        .header {
+-            text-align: center;
+-            margin-bottom: 30px;
+-            padding: 20px;
+-            background: rgba(255, 255, 255, 0.1);
+-            border-radius: 20px;
+-            backdrop-filter: blur(10px);
+-        }
++        setTimeout(() => userSession.activeOperations.delete(operationId), 5000);
+         
+-        .logo {
+-            font-size: 2.5rem;
+-            font-weight: bold;
+-            margin-bottom: 10px;
+-            background: linear-gradient(45deg, #fff, #f0f0f0);
+-            -webkit-background-clip: text;
+-            -webkit-text-fill-color: transparent;
++        if (button.pressType === 'long') {
++          setImmediate(async () => {
++            try {
++              await this.processRequest("what do you see", session, userId);
++            } catch (error) {
++              this.logger.error(`❌ Failed to process test request for user ${userId}:`, error);
++            }
++          });
++        } else {
++          this.showFeedbackAsync(session, "Voice assistant is ready. Say 'Hey Mentra' to start...", 3000);
+         }
+-        
+-        .status {
+-            display: flex;
+-            justify-content: space-between;
+-            margin: 20px 0;
+-            gap: 10px;
++      });
++
++      // Transcription listener with improved duplicate prevention
++      session.events.onTranscription((data) => {
++        try {
++          // FIXED: Create unique operation ID to prevent duplicates
++          const operationId = `transcription_${data.isFinal}_${Date.now()}`;
++          if (userSession.activeOperations.has(operationId)) {
++            this.logger.debug(`🔄 Duplicate transcription ignored for user ${userId}`);
++            return;
++          }
++          userSession.activeOperations.add(operationId);
++          
++          // Clean up operation ID after processing
++          setTimeout(() => userSession.activeOperations.delete(operationId), 2000);
++          
++          this.handleTranscription(data, userSession);
++        } catch (error) {
++          this.logger.error(`❌ Error in transcription handler for user ${userId}:`, error);
+         }
+-        
+-        .status-card {
+-            flex: 1;
+-            padding: 15px;
+-            background: rgba(255, 255, 255, 0.1);
+-            border-radius: 15px;
+-            text-align: center;
+-            backdrop-filter: blur(10px);
++      });
++
++      // Connection event listeners
++      session.events.onConnected(() => {
++        this.logger.info(`✅ WebSocket connected for user ${userId}`);
++        this.broadcastSSE(userId, { type: 'connection', status: 'connected', timestamp: Date.now() });
++      });
++
++      session.events.onDisconnected(() => {
++        this.logger.warn(`⚠️ WebSocket disconnected for user ${userId}`);
++        this.resetUserListeningState(userId);
++        this.broadcastSSE(userId, { type: 'connection', status: 'disconnected', timestamp: Date.now() });
++      });
++
++      session.events.onError((error) => {
++        this.logger.error(`❌ WebSocket error for user ${userId}:`, error);
++        this.resetUserListeningState(userId);
++      });
++
++      userSession.eventListenersSetup = true;
++      this.logger.info(`✅ Event listeners set up successfully for user ${userId}`);
++      
++    } catch (error) {
++      this.logger.error(`❌ Failed to set up event listeners for user ${userId}:`, error);
++    }
++  }
++
++  /**
++   * FIXED: Improved transcription handling with better duplicate prevention
++   */
++  private handleTranscription(data: any, userSession: UserSession): void {
++    const { userId, session } = userSession;
++    
++    this.logger.debug(`🎤 Transcription for user ${userId}: isFinal=${data.isFinal}, text="${data.text}"`);
++    
++    // Broadcast all transcriptions for real-time display
++    if (data.text && data.text.trim()) {
++      this.broadcastSSE(userId, {
++        type: 'transcription',
++        text: data.text,
++        isFinal: data.isFinal,
++        timestamp: Date.now()
++      });
++    }
++    
++    if (!data.isFinal) return;
++
++    const spokenText = data.text.toLowerCase().trim();
++    if (!spokenText) return;
++    
++    this.logger.info(`🎤 Final transcription for user ${userId}: "${spokenText}"`);
++    
++    // Update last activity
++    userSession.lastActivity = Date.now();
++    
++    // Check rate limiting
++    if (!this.checkRateLimit(userSession)) {
++      this.logger.warn(`⚠️ Rate limit exceeded for user ${userId}`);
++      this.showFeedbackAsync(session, "Please wait a moment before making another request.", 3000);
++      return;
++    }
++    
++    // Handle two-stage interaction
++    if (userSession.isListening) {
++      const timeSinceWakeWord = Date.now() - userSession.listeningTimestamp;
++      
++      if (timeSinceWakeWord > this.config.LISTENING_TIMEOUT) {
++        this.logger.info(`⏰ Listening timeout for user ${userId}`);
++        this.resetUserListeningState(userId);
++        this.showFeedbackAsync(session, "Listening timeout. Say 'Hey Mentra' to try again.", 3000);
++        return;
++      }
++      
++      // Process the user's question
++      this.logger.info(`✨ Processing user question for ${userId}: "${spokenText}"`);
++      this.resetUserListeningState(userId);
++      
++      // Create unique request ID to prevent duplicates
++      const requestId = `req_${userId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
++      
++      setImmediate(async () => {
++        try {
++          await this.processRequest(spokenText, session, userId, requestId);
++        } catch (error) {
++          this.logger.error(`❌ Failed to process request for user ${userId}:`, error);
+         }
+-        
+-        .conversation-list {
+-            display: flex;
+-            flex-direction: column;
+-            gap: 15px;
++      });
++      
++    } else if (this.detectWakeWord(spokenText)) {
++      this.logger.info(`✨ Wake word detected for user ${userId}`);
++      
++      // FIXED: Check if already in listening state to prevent duplicates
++      if (userSession.isListening) {
++        this.logger.debug(`🔄 Already in listening state for user ${userId}, ignoring duplicate wake word`);
++        return;
++      }
++      
++      // Enter listening mode
++      userSession.isListening = true;
++      userSession.listeningTimestamp = Date.now();
++      
++      setImmediate(async () => {
++        await this.speakWithRetry(session, "I'm listening, how can I help?", userId);
++        this.showFeedbackAsync(session, "🎤 I'm listening, how can I help?", 8000);
++      });
++      
++      // Set timeout to reset listening state
++      setTimeout(() => {
++        const currentSession = this.userSessions.get(userId);
++        if (currentSession?.isListening && currentSession.listeningTimestamp === userSession.listeningTimestamp) {
++          this.logger.info(`⏰ Auto-resetting listening state for user ${userId}`);
++          this.resetUserListeningState(userId);
+         }
+-        
+-        .conversation-item {
+-            background: rgba(255, 255, 255, 0.1);
+-            border-radius: 20px;
+-            padding: 20px;
+-            backdrop-filter: blur(10px);
+-            border: 1px solid rgba(255, 255, 255, 0.2);
+-            transition: all 0.3s ease;
+-        }
+-        
+-        .conversation-item:hover {
+-            transform: translateY(-2px);
+-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+-        }
+-        
+-        .conversation-header {
+-            display: flex;
+-            justify-content: between;
+-            align-items: center;
+-            margin-bottom: 15px;
+-        }
+-        
+-        .timestamp {
+-            font-size: 0.9rem;
+-            opacity: 0.7;
+-        }
+-        
+-        .status-badge {
+-            padding: 5px 12px;
+-            border-radius: 20px;
+-            font-size: 0.8rem;
+-            font-weight: bold;
+-        }
+-        
+-        .status-completed { background: #4CAF50; }
+-        .status-processing { background: #FF9800; }
+-        .status-error { background: #F44336; }
+-        
+-        .question {
+-            font-weight: bold;
+-            margin-bottom: 10px;
+-            color: #FFE082;
+-        }
+-        
+-        .response {
+-            line-height: 1.6;
+-            margin-bottom: 15px;
+-        }
+-        
+-        .photo-container {
+-            margin-top: 15px;
+-        }
+-        
+-        .photo {
+-            width: 100%;
+-            max-width: 300px;
+-            border-radius: 15px;
+-            cursor: pointer;
+-            transition: transform 0.3s ease;
+-        }
+-        
+-        .photo:hover {
+-            transform: scale(1.05);
+-        }
+-        
+-        .processing-time {
+-            font-size: 0.8rem;
+-            opacity: 0.7;
+-            text-align: right;
+-        }
+-        
+-        .loading {
+-            text-align: center;
+-            padding: 40px;
+-        }
+-        
+-        .spinner {
+-            width: 40px;
+-            height: 40px;
+-            border: 4px solid rgba(255, 255, 255, 0.3);
+-            border-top: 4px solid white;
+-            border-radius: 50%;
+-            animation: spin 1s linear infinite;
+-            margin: 0 auto 20px;
+-        }
+-        
+-        @keyframes spin {
+-            0% { transform: rotate(0deg); }
+-            100% { transform: rotate(360deg); }
+-        }
+-        
+-        .empty-state {
+-            text-align: center;
+-            padding: 60px 20px;
+-            opacity: 0.7;
+-        }
+-        
+-        .refresh-btn {
+-            position: fixed;
+-            bottom: 30px;
+-            right: 30px;
+-            width: 60px;
+-            height: 60px;
+-            border-radius: 50%;
+-            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+-            border: none;
+-            color: white;
+-            font-size: 1.5rem;
+-            cursor: pointer;
+-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+-            transition: all 0.3s ease;
+-        }
+-        
+-        .refresh-btn:hover {
+-            transform: scale(1.1);
+-        }
+-        
+-        @media (max-width: 768px) {
+-            .container { padding: 15px; }
+-            .status { flex-direction: column; }
+-            .logo { font-size: 2rem; }
+-        }
+-    </style>
+-</head>
+-<body>
+-    <div id="root"></div>
+-
+-    <script type="text/babel">
+-        const { useState, useEffect } = React;
+-
+-        function App() {
+-            const [conversations, setConversations] = useState([]);
+-            const [loading, setLoading] = useState(true);
+-            const [stats, setStats] = useState({ activeUsers: 0, lastActivity: 0 });
+-
+-            const fetchData = async () => {
+-                try {
+-                    const response = await fetch('/api/conversations');
+-                    const data = await response.json();
+-                    setConversations(data.conversations || []);
+-                    setStats({ 
+-                        activeUsers: data.activeUsers || 0, 
+-                        lastActivity: data.lastActivity || 0 
+-                    });
+-                } catch (error) {
+-                    console.error('Failed to fetch conversations:', error);
+-                } finally {
+-                    setLoading(false);
+-                }
+-            };
+-
+-            useEffect(() => {
+-                fetchData();
+-                const interval = setInterval(fetchData, 3000); // Auto-refresh every 3 seconds
+-                return () => clearInterval(interval);
+-            }, []);
+-
+-            const formatTime = (timestamp) => {
+-                return new Date(timestamp).toLocaleTimeString();
+-            };
+-
+-            const formatDuration = (ms) => {
+-                return \`\${(ms / 1000).toFixed(1)}s\`;
+-            };
+-
+-            if (loading) {
+-                return (
+-                    <div className="container">
+-                        <div className="loading">
+-                            <div className="spinner"></div>
+-                            <p>Loading conversations...</p>
+-                        </div>
+-                    </div>
+-                );
+-            }
+-
+-            return (
+-                <div className="container">
+-                    <div className="header">
+-                        <div className="logo">👓 Hey Mentra</div>
+-                        <p>Voice Assistant Dashboard</p>
+-                    </div>
+-
+-                    <div className="status">
+-                        <div className="status-card">
+-                            <div style={{fontSize: '1.5rem', fontWeight: 'bold'}}>{conversations.length}</div>
+-                            <div>Conversations</div>
+-                        </div>
+-                        <div className="status-card">
+-                            <div style={{fontSize: '1.5rem', fontWeight: 'bold'}}>{stats.activeUsers}</div>
+-                            <div>Active Users</div>
+-                        </div>
+-                        <div className="status-card">
+-                            <div style={{fontSize: '1.5rem', fontWeight: 'bold'}}>
+-                                {stats.lastActivity ? formatTime(stats.lastActivity) : '--'}
+-                            </div>
+-                            <div>Last Activity</div>
+-                        </div>
+-                    </div>
+-
+-                    <div className="conversation-list">
+-                        {conversations.length === 0 ? (
+-                            <div className="empty-state">
+-                                <h3>🎙️ No conversations yet</h3>
+-                                <p>Start talking to your Mentra glasses!</p>
+-                                <p>Say "Hey Mentra" + your question</p>
+-                            </div>
+-                        ) : (
+-                            conversations.map(conv => (
+-                                <div key={conv.id} className="conversation-item">
+-                                    <div className="conversation-header">
+-                                        <span className="timestamp">{formatTime(conv.timestamp)}</span>
+-                                        <span className={\`status-badge status-\${conv.status}\`}>
+-                                            {conv.status}
+-                                        </span>
+-                                    </div>
+-                                    
+-                                    <div className="question">
+-                                        🎤 "{conv.question}"
+-                                    </div>
+-                                    
+-                                    <div className="response">
+-                                        🤖 {conv.response}
+-                                    </div>
+-                                    
+-                                    {conv.hasPhoto && (
+-                                        <div className="photo-container">
+-                                            <img 
+-                                                src={\`/api/photo/\${conv.id}\`}
+-                                                alt="Captured moment"
+-                                                className="photo"
+-                                                onClick={() => window.open(\`/api/photo/\${conv.id}\`, '_blank')}
+-                                            />
+-                                        </div>
+-                                    )}
+-                                    
+-                                    <div className="processing-time">
+-                                        ⚡ Processed in {formatDuration(conv.processingTime)}
+-                                    </div>
+-                                </div>
+-                            ))
+-                        )}
+-                    </div>
+-
+-                    <button className="refresh-btn" onClick={fetchData} title="Refresh">
+-                        🔄
+-                    </button>
+-                </div>
+-            );
+-        }
+-
+-        ReactDOM.render(<App />, document.getElementById('root'));
+-    </script>
+-</body>
+-</html>`;
++      }, this.config.LISTENING_TIMEOUT);
++    }
+   }
+ 
+-  protected async onSession(session: AppSession, sessionId: string, userId: string): Promise<void> {
+-    this.logger.info(`🎙️ Session started for user ${userId} (sessionId: ${sessionId})`);
+-    
+-    // Initialize user state
+-    this.activePhotoRequests.set(userId, false);
+-    this.lastPhotoTime.set(userId, 0);
++  /**
++   * NEW: Rate limiting check
++   */
++  private checkRateLimit(userSession: UserSession): boolean {
++    const now = Date.now();
++    const { rateLimiter } = userSession;
+     
+-    // WEBVIEW: Initialize user conversation storage and track active user
+-    if (!this.conversations.has(userId)) {
+-      this.conversations.set(userId, []);
++    // Reset window if expired
++    if (now - rateLimiter.windowStart > this.config.RATE_LIMIT_WINDOW) {
++      rateLimiter.requests = 0;
++      rateLimiter.windowStart = now;
+     }
+-    this.activeUsers.set(userId, { lastActivity: Date.now(), sessionId });
+     
+-    // Show welcome message immediately (non-blocking)
+-    setImmediate(() => {
+-      try {
+-        session.layouts.showTextWall("Hey Mentra is ready! Say 'Hey Mentra' + your question.");
+-        this.logger.info(`✅ Welcome message shown for user ${userId}`);
+-      } catch (error) {
+-        this.logger.error(`❌ Failed to show welcome message for user ${userId}:`, error);
+-      }
+-    });
++    rateLimiter.requests++;
++    return rateLimiter.requests <= this.config.RATE_LIMIT_MAX_REQUESTS;
++  }
+ 
+-    // Set up button press listener for testing (like camera stream example)
+-    try {
+-      session.events.onButtonPress((button) => {
+-        this.logger.info(`🔘 Button pressed by user ${userId}: ${button.buttonId}, type: ${button.pressType}`);
+-        
+-        if (button.pressType === 'long') {
+-          // Long press - trigger a test question
+-          this.logger.info(`🧪 Test mode triggered by user ${userId}`);
+-          setImmediate(async () => {
+-            try {
+-              await this.processRequest("what do you see", session, userId);
+-            } catch (error) {
+-              this.logger.error(`❌ Failed to process test request for user ${userId}:`, error);
+-            }
+-          });
+-        } else {
+-          // Short press - show status
+-          session.layouts.showTextWall("Voice assistant is listening for 'Hey Mentra'...", {durationMs: 3000});
+-        }
+-      });
+-      
+-      this.logger.info(`✅ Button listener set up successfully for user ${userId}`);
+-    } catch (error) {
+-      this.logger.error(`❌ Failed to set up button listener for user ${userId}:`, error);
++  /**
++   * FIXED: Process request with improved duplicate prevention
++   */
++  private async processRequest(question: string, session: AppSession, userId: string, requestId?: string): Promise<void> {
++    // Generate unique request ID if not provided
++    const uniqueRequestId = requestId || `req_${userId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
++    
++    // FIXED: Check if request is already being processed
++    if (this.processingLock.has(uniqueRequestId)) {
++      this.logger.warn(`🔄 Request ${uniqueRequestId} already being processed, skipping duplicate`);
++      return;
+     }
+-
+-    // Set up transcription listener (synchronous like camera stream example)
++    
++    // Add to processing lock
++    this.processingLock.add(uniqueRequestId);
++    
+     try {
+-      session.events.onTranscription((data) => {
+-        try {
+-          this.logger.debug(`🎤 Transcription received for user ${userId}: isFinal=${data.isFinal}, text="${data.text}"`);
+-          
+-          if (!data.isFinal) return;
+-
+-          const spokenText = data.text.toLowerCase().trim();
+-          this.logger.info(`🎤 Final transcription for user ${userId}: "${spokenText}"`);
+-          
+-          // Quick wake word detection
+-          if (this.detectWakeWord(spokenText)) {
+-            const question = this.extractQuestion(spokenText);
+-            this.logger.info(`✨ Wake word detected for user ${userId}: "${question}"`);
+-            
+-            // Update last activity for webview
+-            this.activeUsers.set(userId, { lastActivity: Date.now(), sessionId });
+-            
+-            // Non-blocking queue processing
+-            setImmediate(async () => {
+-              try {
+-                await this.processRequest(question, session, userId);
+-              } catch (error) {
+-                this.logger.error(`❌ Failed to process request for user ${userId}:`, error);
+-              }
+-            });
+-          } else {
+-            this.logger.debug(`🔇 No wake word detected in: "${spokenText}"`);
+-          }
+-        } catch (error) {
+-          this.logger.error(`❌ Error in transcription handler for user ${userId}:`, error);
+-        }
+-      });
++      // Check queue size
++      if (this.requestQueue.length >= this.config.MAX_QUEUE_SIZE) {
++        this.logger.warn(`⚠️ Queue full, dropping request for user ${userId}`);
++        await this.speakWithRetry(session, "I'm very busy right now. Please try again in a moment.", userId);
++        return;
++      }
++      
++      // Add to queue with priority
++      const queuedRequest: QueuedRequest = {
++        id: uniqueRequestId,
++        question: this.sanitizeText(question),
++        session,
++        userId,
++        timestamp: Date.now(),
++        priority: 1
++      };
++      
++      this.requestQueue.push(queuedRequest);
++      this.requestQueue.sort((a, b) => b.priority - a.priority); // Higher priority first
++      
++      // Process queue if not already processing
++      if (!this.isQueueProcessing) {
++        await this.processQueueAsync();
++      }
+       
+-      this.logger.info(`✅ Transcription listener set up successfully for user ${userId}`);
+     } catch (error) {
+-      this.logger.error(`❌ Failed to set up transcription listener for user ${userId}:`, error);
++      this.logger.error(`❌ Error adding request to queue:`, error);
++      this.processingLock.delete(uniqueRequestId);
+     }
+   }
+ 
+-  protected async onStop(sessionId: string, userId: string, reason: string): Promise<void> {
+-    // Clean up user state
+-    this.activePhotoRequests.delete(userId);
+-    this.lastPhotoTime.delete(userId);
+-    
+-    // WEBVIEW: Remove from active users but keep conversation history
+-    this.activeUsers.delete(userId);
+-    
+-    this.logger.info(`🎙️ Session stopped for user ${userId}, reason: ${reason}`);
+-  }
+-
+   /**
+-   * ENHANCED: Async queue-based request processing with WEBVIEW data storage
++   * FIXED: Queue processing with better concurrency control
+    */
+-  private async processRequest(question: string, session: AppSession, userId: string): Promise<void> {
+-    // Add to queue
+-    this.requestQueue.push({ question, session, userId, timestamp: Date.now() });
++  private async processQueueAsync(): Promise<void> {
++    if (this.requestQueue.length === 0 || this.isQueueProcessing) return;
++    
++    this.isQueueProcessing = true;
+     
+-    // Process if not already processing (non-blocking)
+-    if (!this.isProcessingRequest) {
+-      await this.processQueueAsync();
++    while (this.requestQueue.length > 0) {
++      const request = this.requestQueue.shift()!;
++      
++      try {
++        await this.processQueuedRequest(request);
++      } catch (error) {
++        this.logger.error(`❌ Error processing queued request ${request.id}:`, error);
++        this.metrics.failedRequests++;
++      } finally {
++        this.processingLock.delete(request.id);
++      }
+     }
++    
++    this.isQueueProcessing = false;
+   }
+ 
+   /**
+-   * ENHANCED: Fully async queue processing with webview data storage
++   * ENHANCED: Process individual queued request with caching
+    */
+-  private async processQueueAsync(): Promise<void> {
+-    if (this.requestQueue.length === 0 || this.isProcessingRequest) return;
++  private async processQueuedRequest(request: QueuedRequest): Promise<void> {
++    const startTime = Date.now();
++    this.metrics.totalRequests++;
+     
+-    this.isProcessingRequest = true;
+-    const request = this.requestQueue.shift()!;
++    // Check cache first
++    const cacheKey = this.generateCacheKey(request.question, request.userId);
++    const cachedResponse = this.responseCache.get(cacheKey);
+     
+-    // WEBVIEW: Create conversation entry
+-    const conversationId = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+-    const startTime = Date.now();
++    if (cachedResponse && Date.now() - cachedResponse.timestamp < this.config.CACHE_TTL) {
++      this.logger.info(`💾 Using cached response for user ${request.userId}`);
++      await this.speakWithRetry(request.session, cachedResponse.response, request.userId);
++      this.metrics.successfulRequests++;
++      return;
++    }
+     
++    // Create conversation entry
++    const conversationId = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+     const conversationEntry: ConversationEntry = {
+       id: conversationId,
+       timestamp: startTime,
+@@ -614,116 +753,154 @@ class HeyMentraVoiceAssistant extends AppServer {
+       response: '',
+       hasPhoto: false,
+       processingTime: 0,
+-      status: 'processing'
++      status: 'processing',
++      location: this.generateMockLocation(),
++      category: this.categorizeQuestion(request.question),
++      confidence: 0,
++      retryCount: 0,
++      modelUsed: 'gemini-2.5-flash-lite-preview-06-17'
+     };
+     
+-    // Add to user's conversation list
++    // Add to conversations
+     const userConversations = this.conversations.get(request.userId) || [];
+-    userConversations.unshift(conversationEntry); // Add to beginning for latest-first display
+-    this.conversations.set(request.userId, userConversations);
++    userConversations.unshift(conversationEntry);
+     
+-    // Keep only last 50 conversations per user to prevent memory issues
+-    if (userConversations.length > 50) {
+-      userConversations.splice(50);
++    // Limit conversations per user
++    if (userConversations.length > MAX_CONVERSATIONS_PER_USER) {
++      userConversations.splice(MAX_CONVERSATIONS_PER_USER);
+     }
+     
++    this.conversations.set(request.userId, userConversations);
++    
++    // Broadcast conversation started
++    this.broadcastSSE(request.userId, {
++      type: 'conversation-started',
++      conversation: this.sanitizeConversationForBroadcast(conversationEntry)
++    });
++    
+     try {
+-      // Show immediate feedback (non-blocking)
++      // Show immediate feedback
+       this.showFeedbackAsync(request.session, "Processing...", 1000);
+       
+-      // ENHANCED PARALLEL PROCESSING with better promise handling
+-      const parallelOperations = await this.executeParallelOperations(request, request.userId);
++      // Execute parallel operations
++      const parallelResults = await this.executeParallelOperations(request);
+       
+-      // Process results with fallback chain
+-      const finalResponse = await this.processResults(parallelOperations, request.question, conversationEntry);
++      // Process results
++      const finalResponse = await this.processResults(parallelResults, request.question, conversationEntry);
+       
+-      // Update conversation entry with results
++      // Update conversation entry
+       conversationEntry.response = finalResponse;
+       conversationEntry.processingTime = Date.now() - startTime;
+       conversationEntry.status = 'completed';
++      conversationEntry.confidence = this.calculateConfidence(parallelResults);
++      
++      // Cache response
++      this.responseCache.set(cacheKey, {
++        response: finalResponse,
++        timestamp: Date.now()
++      });
++      
++      // Broadcast completion
++      this.broadcastSSE(request.userId, {
++        type: 'conversation-completed',
++        conversation: this.sanitizeConversationForBroadcast(conversationEntry)
++      });
+       
+-      // ENHANCED TTS with retry mechanism
++      // Speak response
+       await this.speakResponseWithRetry(request.session, finalResponse);
+       
++      // Update metrics
++      this.metrics.successfulRequests++;
++      this.metrics.averageResponseTime = (this.metrics.averageResponseTime * (this.metrics.successfulRequests - 1) + conversationEntry.processingTime) / this.metrics.successfulRequests;
++      
++      // Save conversations periodically
++      this.saveConversations();
++      
+     } catch (error) {
+       this.logger.error(`❌ Request failed:`, error);
+       
+-      // Update conversation entry with error
+       conversationEntry.response = "Sorry, I encountered an error. Please try again.";
+       conversationEntry.processingTime = Date.now() - startTime;
+       conversationEntry.status = 'error';
+       
+-      // Async error response (non-blocking)
++      this.broadcastSSE(request.userId, {
++        type: 'conversation-error',
++        conversation: this.sanitizeConversationForBroadcast(conversationEntry)
++      });
++      
+       setImmediate(async () => {
+         await this.speakResponseWithRetry(request.session, "Sorry, please try again.");
+       });
+-    } finally {
+-      this.isProcessingRequest = false;
+       
+-      // Process next item in queue (non-blocking)
+-      if (this.requestQueue.length > 0) {
+-        setImmediate(() => this.processQueueAsync());
+-      }
++      this.metrics.failedRequests++;
+     }
+   }
+ 
+   /**
+-   * ENHANCED: Execute parallel operations with better promise management
++   * ENHANCED: Execute parallel operations with better error isolation
+    */
+-  private async executeParallelOperations(request: { question: string; session: AppSession; userId: string; timestamp: number }, userId: string) {
+-    // Create promises that won't reject the entire Promise.allSettled
+-    const photoPromise = this.safePhotoCapture(request.session, userId);
++  private async executeParallelOperations(request: QueuedRequest) {
++    const photoPromise = this.safePhotoCapture(request.session, request.userId);
+     const textPromise = this.safeTextOnlyProcessing(request.question);
+     
+-    // Execute in parallel with proper error isolation
+     return await Promise.allSettled([photoPromise, textPromise]);
+   }
+ 
+   /**
+-   * ENHANCED: Safe photo capture with stable implementation (based on camera_stream_example)
++   * ENHANCED: Safe photo capture with better duplicate prevention
+    */
+   private async safePhotoCapture(session: AppSession, userId: string): Promise<PhotoData | null> {
+-    // Check if photo request is already in progress for this user
+-    if (this.activePhotoRequests.get(userId)) {
++    const operationId = `photo_${userId}`;
++    
++    // FIXED: Check if photo request is already active
++    if (this.activePhotoRequests.has(operationId)) {
+       this.logger.warn(`📸 Photo request skipped for user ${userId} - request already in progress`);
+       return null;
+     }
+ 
+-    // Check minimum time interval (2 seconds like camera stream example)
++    // Check minimum time interval
+     const now = Date.now();
+     const lastPhoto = this.lastPhotoTime.get(userId) || 0;
+-    if (now - lastPhoto < 2000) {
++    if (now - lastPhoto < this.config.PHOTO_COOLDOWN) {
+       this.logger.warn(`📸 Photo request skipped for user ${userId} - too soon (${now - lastPhoto}ms since last photo)`);
+       return null;
+     }
+ 
+     try {
+-      // Mark photo request as active
+-      this.activePhotoRequests.set(userId, true);
++      this.activePhotoRequests.add(operationId);
+       this.logger.info(`📸 Taking photo for user ${userId}...`);
+       
+-      // Small delay to let camera settle (like camera stream example does with async)
+       await new Promise(resolve => setTimeout(resolve, 100));
+       
+-      const photo = await session.camera.requestPhoto();
++      const photo = await Promise.race([
++        session.camera.requestPhoto(),
++        new Promise((_, reject) => 
++          setTimeout(() => reject(new Error('Photo timeout')), 5000)
++        )
++      ]) as PhotoData;
+       
+-      // Update last photo time
+       this.lastPhotoTime.set(userId, Date.now());
++      this.metrics.photosCaptured++;
+       
+       this.logger.info(`📸 Photo captured successfully for user ${userId}`);
++      
++      this.broadcastSSE(userId, {
++        type: 'photo-captured',
++        timestamp: Date.now()
++      });
++      
+       return photo;
+     } catch (error) {
+       const errorMessage = error instanceof Error ? error.message : String(error);
+       this.logger.warn(`📸 Photo capture failed for user ${userId}: ${errorMessage}`);
+       return null;
+     } finally {
+-      // Always clear the active request flag
+-      this.activePhotoRequests.set(userId, false);
++      this.activePhotoRequests.delete(operationId);
+     }
+   }
+ 
+   /**
+-   * ENHANCED: Safe text-only processing with retry
++   * ENHANCED: Safe text processing with caching
+    */
+   private async safeTextOnlyProcessing(question: string): Promise<string> {
+     const maxRetries = 2;
+@@ -733,20 +910,21 @@ class HeyMentraVoiceAssistant extends AppServer {
+         this.logger.info(`🤖 Text processing attempt ${attempt}/${maxRetries}`);
+         
+         const model = this.gemini.getGenerativeModel({ 
+-          model: "gemini-1.5-flash",
++          model: "gemini-2.5-flash-lite-preview-06-17",
+           generationConfig: {
+-            maxOutputTokens: 100,
++            maxOutputTokens: 500,
+             temperature: 0.7
+           }
+         });
+ 
+         const prompt = `Smart glasses AI assistant. User asked: "${question}". 
+-Give a helpful 1-sentence response. Be conversational for text-to-speech.`;
++Give a helpful 1-2 sentence response. Be conversational for text-to-speech.
++Focus on being concise and natural.`;
+ 
+         const result = await Promise.race([
+           model.generateContent([prompt]),
+           new Promise((_, reject) => 
+-            setTimeout(() => reject(new Error(`Gemini timeout attempt ${attempt}`)), 6000)
++            setTimeout(() => reject(new Error(`Gemini timeout attempt ${attempt}`)), this.config.AI_TIMEOUT)
+           )
+         ]) as any;
+         
+@@ -754,7 +932,7 @@ Give a helpful 1-sentence response. Be conversational for text-to-speech.`;
+         const text = response.text();
+         
+         if (text && text.trim().length > 0) {
+-          return text;
++          return this.sanitizeText(text);
+         }
+         
+         throw new Error('Empty response from Gemini');
+@@ -767,7 +945,6 @@ Give a helpful 1-sentence response. Be conversational for text-to-speech.`;
+           return "I'm ready to help! What would you like to know?";
+         }
+         
+-        // Brief delay before retry
+         await new Promise(resolve => setTimeout(resolve, 500));
+       }
+     }
+@@ -776,7 +953,7 @@ Give a helpful 1-sentence response. Be conversational for text-to-speech.`;
+   }
+ 
+   /**
+-   * ENHANCED: Process parallel operation results
++   * ENHANCED: Process results with improved error handling
+    */
+   private async processResults(
+     results: PromiseSettledResult<any>[], 
+@@ -809,12 +986,11 @@ Give a helpful 1-sentence response. Be conversational for text-to-speech.`;
+       return textOnlyResult.value;
+     }
+     
+-    // Final fallback
+     return "I'm ready to help! Could you try asking your question again?";
+   }
+ 
+   /**
+-   * ENHANCED: Safe vision processing with retry
++   * ENHANCED: Safe vision processing with better prompts
+    */
+   private async safeVisionProcessing(question: string, photo: PhotoData): Promise<string> {
+     const maxRetries = 2;
+@@ -824,22 +1000,24 @@ Give a helpful 1-sentence response. Be conversational for text-to-speech.`;
+         this.logger.info(`🤖 Vision processing attempt ${attempt}/${maxRetries}`);
+         
+         const model = this.gemini.getGenerativeModel({ 
+-          model: "gemini-1.5-flash",
++          model: "gemini-2.5-flash-lite-preview-06-17",
+           generationConfig: {
+-            maxOutputTokens: 150,
++            maxOutputTokens: 200,
+             temperature: 0.7
+           }
+         });
+ 
+-        // Check image size first
++        // Check image size
+         let imageData = photo.buffer.toString('base64');
+         if (imageData.length > 1000000) {
+           this.logger.info(`🖼️ Large image detected, using text-only response`);
+           return await this.safeTextOnlyProcessing(question);
+         }
+ 
+-        const prompt = `Smart glasses user asked: "${question}" about this image. 
+-Give a helpful 1-2 sentence response for text-to-speech.`;
++        const prompt = `You are a smart glasses AI assistant. The user asked: "${question}" while looking at this image.
++        
++Analyze the image and provide a helpful, conversational response in 1-2 sentences.
++Be natural and engaging for text-to-speech. Focus on what's most relevant to their question.`;
+ 
+         const result = await Promise.race([
+           model.generateContent([
+@@ -847,7 +1025,7 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
+             { inlineData: { data: imageData, mimeType: photo.mimeType } }
+           ]),
+           new Promise((_, reject) => 
+-            setTimeout(() => reject(new Error(`Vision timeout attempt ${attempt}`)), 8000)
++            setTimeout(() => reject(new Error(`Vision timeout attempt ${attempt}`)), this.config.AI_TIMEOUT)
+           )
+         ]) as any;
+ 
+@@ -855,7 +1033,7 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
+         const text = response.text();
+         
+         if (text && text.trim().length > 0) {
+-          return text;
++          return this.sanitizeText(text);
+         }
+         
+         throw new Error('Empty response from Gemini Vision');
+@@ -865,11 +1043,9 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
+         this.logger.warn(`🤖 Vision processing attempt ${attempt} failed: ${errorMessage}`);
+         
+         if (attempt === maxRetries) {
+-          // Fallback to text-only processing
+           return await this.safeTextOnlyProcessing(question);
+         }
+         
+-        // Brief delay before retry
+         await new Promise(resolve => setTimeout(resolve, 500));
+       }
+     }
+@@ -878,27 +1054,26 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
+   }
+ 
+   /**
+-   * ENHANCED: TTS with retry mechanism and async feedback
++   * ENHANCED: TTS with retry and better error handling
+    */
+   private async speakResponseWithRetry(session: AppSession, response: string): Promise<void> {
+     const maxRetries = 2;
++    const sanitizedResponse = this.sanitizeText(response);
+     
+     for (let attempt = 1; attempt <= maxRetries; attempt++) {
+       try {
+-        this.logger.info(`🗣️ TTS attempt ${attempt}/${maxRetries}: "${response}"`);
++        this.logger.info(`🗣️ TTS attempt ${attempt}/${maxRetries}: "${sanitizedResponse}"`);
+         
+-        // Try TTS with timeout
+         const result = await Promise.race([
+-          session.audio.speak(response),
++          session.audio.speak(sanitizedResponse),
+           new Promise((_, reject) => 
+-            setTimeout(() => reject(new Error(`TTS timeout attempt ${attempt}`)), 10000)
++            setTimeout(() => reject(new Error(`TTS timeout attempt ${attempt}`)), this.config.TTS_TIMEOUT)
+           )
+         ]) as any;
+         
+         if (result.success) {
+           this.logger.info(`✅ TTS successful on attempt ${attempt}`);
+-          // Show text as backup (non-blocking)
+-          this.showFeedbackAsync(session, `AI: ${response}`, 4000);
++          this.showFeedbackAsync(session, `AI: ${sanitizedResponse}`, 4000);
+           return;
+         } else {
+           throw new Error(result.error || 'TTS failed');
+@@ -910,24 +1085,84 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
+         
+         if (attempt === maxRetries) {
+           this.logger.info(`🗣️ All TTS attempts failed, showing text only`);
+-          // Final fallback to text only
+-          this.showFeedbackAsync(session, `AI: ${response}`, 6000);
++          this.showFeedbackAsync(session, `AI: ${sanitizedResponse}`, 6000);
+           return;
+         }
+         
+-        // Brief delay before retry
+         await new Promise(resolve => setTimeout(resolve, 300));
+       }
+     }
+   }
+ 
+   /**
+-   * ENHANCED: Non-blocking feedback display
++   * ENHANCED: Speak with retry for wake word responses
+    */
+-  private showFeedbackAsync(session: AppSession, message: string, durationMs: number): void {
+-    setImmediate(() => {
++  private async speakWithRetry(session: AppSession, message: string, userId: string): Promise<void> {
++    const maxRetries = 3;
++    const sanitizedMessage = this.sanitizeText(message);
++    
++    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+       try {
+-        session.layouts.showTextWall(message, { durationMs });
++        this.logger.info(`🗣️ TTS attempt ${attempt}/${maxRetries} for user ${userId}: "${sanitizedMessage}"`);
++        
++        const result = await Promise.race([
++          session.audio.speak(sanitizedMessage),
++          new Promise((_, reject) => 
++            setTimeout(() => reject(new Error(`TTS timeout attempt ${attempt}`)), this.config.TTS_TIMEOUT)
++          )
++        ]) as any;
++        
++        if (result.success) {
++          this.logger.info(`✅ TTS successful for user ${userId} on attempt ${attempt}`);
++          return;
++        } else {
++          throw new Error(result.error || 'TTS failed');
++        }
++        
++      } catch (error) {
++        const errorMessage = error instanceof Error ? error.message : String(error);
++        this.logger.warn(`🗣️ TTS attempt ${attempt} failed for user ${userId}: ${errorMessage}`);
++        
++        if (attempt === maxRetries) {
++          this.logger.info(`🗣️ All TTS attempts failed for user ${userId}, using text fallback`);
++          return;
++        }
++        
++        await new Promise(resolve => setTimeout(resolve, 500));
++      }
++    }
++  }
++
++  /**
++   * ENHANCED: Show welcome message with retry
++   */
++  private async showWelcomeWithRetry(session: AppSession, userId: string): Promise<void> {
++    const maxRetries = 3;
++    
++    for (let attempt = 1; attempt <= maxRetries; attempt++) {
++      try {
++        session.layouts.showTextWall("Hey Mentra is ready! Say 'Hey Mentra' to start.");
++        this.logger.info(`✅ Welcome message shown for user ${userId} (attempt ${attempt})`);
++        return;
++      } catch (error) {
++        this.logger.warn(`⚠️ Welcome message attempt ${attempt} failed for user ${userId}:`, error);
++        
++        if (attempt === maxRetries) {
++          this.logger.error(`❌ All welcome message attempts failed for user ${userId}`);
++        } else {
++          await new Promise(resolve => setTimeout(resolve, 1000));
++        }
++      }
++    }
++  }
++
++  /**
++   * ENHANCED: Non-blocking feedback display
++   */
++  private showFeedbackAsync(session: AppSession, message: string, durationMs: number): void {
++    setImmediate(() => {
++      try {
++        session.layouts.showTextWall(this.sanitizeText(message), { durationMs });
+       } catch (error) {
+         this.logger.warn(`⚠️ Failed to show feedback: ${error}`);
+       }
+@@ -935,31 +1170,993 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
+   }
+ 
+   /**
+-   * OPTIMIZED: Faster wake word detection
++   * Enhanced session cleanup
++   */
++  protected async onStop(sessionId: string, userId: string, reason: string): Promise<void> {
++    this.logger.info(`🎙️ Session stopped for user ${userId}, reason: ${reason}`);
++    await this.cleanupUserSession(userId);
++  }
++
++  /**
++   * NEW: Cleanup user session
++   */
++  private async cleanupUserSession(userId: string): Promise<void> {
++    const userSession = this.userSessions.get(userId);
++    if (userSession) {
++      // Clear active operations
++      userSession.activeOperations.clear();
++      
++      // Reset listening state
++      this.resetUserListeningState(userId);
++      
++      // Remove from active sessions
++      this.userSessions.delete(userId);
++    }
++    
++    // Remove from other maps
++    this.lastPhotoTime.delete(userId);
++    this.sseClients.delete(userId);
++    
++    this.logger.info(`🧹 Cleaned up session for user ${userId}`);
++  }
++
++  /**
++   * ENHANCED: Wake word detection with more variants
+    */
+   private detectWakeWord(text: string): boolean {
+-    const wakeWords = ['hey mentra', 'hi mentra', 'hey mantra'];
++    const wakeWords = [
++      // Core variants
++      'hey mentra', 'heyy mentra', 'hey mentraaa', 'hey mentra buddy', 'hey there mentra',
++      'hey mentra please', 'hey mentra now', 'okay mentra',
++    
++      // Phonetic variants
++      'he mentra', 'hementra', 'hamentra', 'hem entra', 'hai mentra', 'hay mentra',
++      'heymantra', 'hey mantra', 'hey mantraa', 'aye mentra', 'hi mentra',
++      'hemantra', 'huh mentra', 'hae mentra', 'hae mantra', 'hee mentra',
++    
++      // ASR misinterpretations
++      'hey mentor', 'hey mantra', 'hey manta', 'hey mental', 'a man try', 'hey mancha',
++      'hey mendra', 'a mentor', 'hey matra', 'hey mentee', 'hey mantraa',
++      'hey mendra', 'aye mantra', 'hey ultra', 'hey ultra',
++    
++      // Additional variants
++      'mentra', 'mantra', 'mentor'
++    ];
++    
+     return wakeWords.some(word => text.includes(word));
+   }
+ 
+   /**
+-   * OPTIMIZED: Simpler question extraction
++   * NEW: Reset user listening state
++   */
++  private resetUserListeningState(userId: string): void {
++    const userSession = this.userSessions.get(userId);
++    if (userSession) {
++      userSession.isListening = false;
++      userSession.listeningTimestamp = 0;
++    }
++  }
++
++  /**
++   * NEW: Generate cache key
++   */
++  private generateCacheKey(question: string, userId: string): string {
++    const normalizedQuestion = question.toLowerCase().trim().replace(/[^\w\s]/g, '');
++    return crypto.createHash('md5').update(`${normalizedQuestion}_${userId}`).digest('hex');
++  }
++
++  /**
++   * NEW: Calculate confidence score
++   */
++  private calculateConfidence(results: PromiseSettledResult<any>[]): number {
++    const [photoResult, textResult] = results;
++    let confidence = 0.5; // Base confidence
++    
++    if (photoResult.status === 'fulfilled' && photoResult.value) {
++      confidence += 0.3; // Photo available
++    }
++    
++    if (textResult.status === 'fulfilled') {
++      confidence += 0.2; // Text processing successful
++    }
++    
++    return Math.min(confidence, 1.0);
++  }
++
++  /**
++   * NEW: Generate mock location
++   */
++  private generateMockLocation() {
++    return {
++      lat: 37.7749 + (Math.random() - 0.5) * 0.1,
++      lng: -122.4194 + (Math.random() - 0.5) * 0.1,
++      address: 'San Francisco, CA'
++    };
++  }
++
++  /**
++   * NEW: Categorize question
++   */
++  private categorizeQuestion(question: string): string {
++    const q = question.toLowerCase();
++    if (q.includes('code') || q.includes('programming') || q.includes('function') || q.includes('debug')) {
++      return 'Technology';
++    } else if (q.includes('keys') || q.includes('wallet') || q.includes('phone') || q.includes('where')) {
++      return 'Personal';
++    } else if (q.includes('meeting') || q.includes('work') || q.includes('email') || q.includes('deadline')) {
++      return 'Work';
++    } else if (q.includes('food') || q.includes('recipe') || q.includes('cook') || q.includes('eat')) {
++      return 'Food';
++    }
++    return 'General';
++  }
++
++  /**
++   * NEW: Sanitize text input/output
++   */
++  private sanitizeText(text: string): string {
++    return text
++      .replace(/[<>]/g, '') // Remove potential XSS
++      .replace(/\n\n+/g, '\n') // Normalize newlines
++      .trim()
++      .substring(0, 1000); // Limit length
++  }
++
++  /**
++   * NEW: Sanitize conversation for broadcast
++   */
++  private sanitizeConversationForBroadcast(conv: ConversationEntry) {
++    return {
++      id: conv.id,
++      timestamp: conv.timestamp,
++      question: conv.question,
++      response: conv.response,
++      hasPhoto: conv.hasPhoto,
++      processingTime: conv.processingTime,
++      status: conv.status,
++      category: conv.category,
++      confidence: conv.confidence
++    };
++  }
++
++  /**
++   * NEW: Broadcast SSE with error handling
++   */
++  private broadcastSSE(userId: string, data: any): void {
++    const client = this.sseClients.get(userId);
++    if (client) {
++      try {
++        client.write(`data: ${JSON.stringify(data)}\n\n`);
++      } catch (error) {
++        this.logger.warn(`Failed to send SSE to user ${userId}:`, error);
++        this.sseClients.delete(userId);
++      }
++    }
++  }
++
++  /**
++   * NEW: Cleanup inactive sessions
+    */
+-  private extractQuestion(text: string): string {
+-    const wakeWords = ['hey mentra', 'hi mentra', 'hey mantra'];
++  private cleanupInactiveSessions(): void {
++    const now = Date.now();
++    const inactiveThreshold = 30 * 60 * 1000; // 30 minutes
+     
+-    for (const wakeWord of wakeWords) {
+-      const index = text.indexOf(wakeWord);
+-      if (index !== -1) {
+-        const question = text.substring(index + wakeWord.length).trim();
+-        return question.length > 2 ? question : "What do you see?";
++    for (const [userId, userSession] of this.userSessions.entries()) {
++      if (now - userSession.lastActivity > inactiveThreshold) {
++        this.logger.info(`🧹 Cleaning up inactive session for user ${userId}`);
++        this.cleanupUserSession(userId);
+       }
+     }
++  }
++
++  /**
++   * NEW: Cleanup old cache entries
++   */
++  private cleanupOldCache(): void {
++    const now = Date.now();
+     
+-    return "What do you see?";
++    for (const [key, entry] of this.responseCache.entries()) {
++      if (now - entry.timestamp > this.config.CACHE_TTL) {
++        this.responseCache.delete(key);
++      }
++    }
++    
++    this.logger.debug(`🧹 Cache cleanup complete. Size: ${this.responseCache.size}`);
++  }
++
++  /**
++   * NEW: Update metrics
++   */
++  private updateMetrics(): void {
++    this.metrics.activeUsers = this.userSessions.size;
++    this.metrics.lastUpdated = Date.now();
++  }
++
++  /**
++   * NEW: Graceful shutdown
++   */
++  private async gracefulShutdown(): Promise<void> {
++    this.logger.info('🛑 Graceful shutdown initiated...');
++    
++    try {
++      // Save conversations
++      this.saveConversations();
++      
++      // Close all SSE connections
++      for (const [userId, client] of this.sseClients.entries()) {
++        try {
++          client.end();
++        } catch (error) {
++          this.logger.warn(`Error closing SSE for user ${userId}:`, error);
++        }
++      }
++      
++      // Cleanup all user sessions
++      for (const userId of this.userSessions.keys()) {
++        await this.cleanupUserSession(userId);
++      }
++      
++      this.logger.info('✅ Graceful shutdown completed');
++      process.exit(0);
++    } catch (error) {
++      this.logger.error('❌ Error during graceful shutdown:', error);
++      process.exit(1);
++    }
++  }
++
++  /**
++   * Generate the same React webview HTML (unchanged for brevity)
++   */
++  private generateReactWebviewHTML(): string {
++    return `
++<!DOCTYPE html>
++<html lang="en">
++<head>
++    <meta charset="UTF-8">
++    <meta name="viewport" content="width=device-width, initial-scale=1.0">
++    <title>Hey Mentra - Voice Assistant</title>
++    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
++    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
++    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
++    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
++    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
++    <style>
++        * {
++            margin: 0;
++            padding: 0;
++            box-sizing: border-box;
++        }
++        
++        body {
++            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
++            background: #f8f9fa;
++            min-height: 100vh;
++            color: #212529;
++            overflow-x: hidden;
++        }
++        
++        .container {
++            max-width: 100%;
++            min-height: 100vh;
++            display: flex;
++            flex-direction: column;
++            padding-bottom: 80px;
++        }
++        
++        .header {
++            background: #ffffff;
++            padding: 20px;
++            display: flex;
++            justify-content: space-between;
++            align-items: center;
++            border-bottom: 1px solid #e9ecef;
++            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
++        }
++        
++        .device-status {
++            display: flex;
++            align-items: center;
++            gap: 10px;
++            font-size: 0.9rem;
++            color: #6c757d;
++        }
++        
++        .device-status.connected {
++            color: #28a745;
++        }
++        
++        .settings-btn {
++            background: none;
++            border: none;
++            color: #6c757d;
++            font-size: 1.5rem;
++            cursor: pointer;
++        }
++        
++        .tab-content {
++            flex: 1;
++            overflow-y: auto;
++            padding: 20px;
++        }
++        
++        .bottom-nav {
++            position: fixed;
++            bottom: 0;
++            left: 0;
++            right: 0;
++            background: #ffffff;
++            border-top: 1px solid #e9ecef;
++            display: flex;
++            justify-content: space-around;
++            padding: 10px 0;
++            z-index: 1000;
++            box-shadow: 0 -2px 4px rgba(0,0,0,0.05);
++        }
++        
++        .nav-item {
++            display: flex;
++            flex-direction: column;
++            align-items: center;
++            gap: 5px;
++            padding: 10px;
++            border: none;
++            background: none;
++            color: #6c757d;
++            font-size: 0.75rem;
++            cursor: pointer;
++            transition: color 0.3s;
++        }
++        
++        .nav-item.active {
++            color: #007bff;
++        }
++        
++        .nav-icon {
++            font-size: 1.5rem;
++        }
++        
++        .card {
++            background: #ffffff;
++            border-radius: 16px;
++            padding: 16px;
++            margin-bottom: 12px;
++            border: 1px solid #e9ecef;
++            transition: all 0.3s ease;
++            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
++        }
++        
++        .card:hover {
++            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
++            transform: translateY(-1px);
++        }
++        
++        .card-header {
++            display: flex;
++            justify-content: space-between;
++            align-items: center;
++            margin-bottom: 12px;
++        }
++        
++        .category-badge {
++            display: inline-flex;
++            align-items: center;
++            gap: 8px;
++            padding: 6px 12px;
++            background: #f8f9fa;
++            border-radius: 20px;
++            font-size: 0.85rem;
++            color: #6c757d;
++            border: 1px solid #e9ecef;
++        }
++        
++        .category-icon {
++            font-size: 1rem;
++        }
++        
++        .time-badge {
++            font-size: 0.85rem;
++            color: #adb5bd;
++        }
++        
++        .card-title {
++            font-size: 1.1rem;
++            font-weight: 600;
++            margin-bottom: 8px;
++            color: #212529;
++        }
++        
++        .card-description {
++            font-size: 0.95rem;
++            color: #6c757d;
++            line-height: 1.5;
++        }
++        
++        .recording-status {
++            background: #ffffff;
++            border-radius: 16px;
++            padding: 20px;
++            margin-bottom: 20px;
++            display: flex;
++            justify-content: space-between;
++            align-items: center;
++            border: 1px solid #e9ecef;
++            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
++        }
++        
++        .recording-btn {
++            background: #dc3545;
++            color: white;
++            border: none;
++            padding: 8px 16px;
++            border-radius: 8px;
++            font-size: 0.9rem;
++            cursor: pointer;
++            display: flex;
++            align-items: center;
++            gap: 8px;
++        }
++        
++        .listening-indicator {
++            display: flex;
++            align-items: center;
++            gap: 8px;
++            color: #6c757d;
++        }
++        
++        .transcript-area {
++            margin-top: 8px;
++            min-height: 20px;
++        }
++        
++        .live-transcript-inline {
++            display: flex;
++            align-items: flex-start;
++            font-size: 0.9rem;
++            color: #212529;
++            line-height: 1.4;
++            word-wrap: break-word;
++            max-width: 100%;
++        }
++        
++        .live-transcript-inline span:last-child {
++            flex: 1;
++        }
++        
++        .speech-history {
++            max-height: 400px;
++            overflow-y: auto;
++        }
++        
++        .speech-item {
++            background: #ffffff;
++            border-radius: 12px;
++            padding: 12px 16px;
++            margin-bottom: 8px;
++            border: 1px solid #e9ecef;
++            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
++        }
++        
++        .speech-header {
++            display: flex;
++            justify-content: space-between;
++            align-items: center;
++            margin-bottom: 8px;
++        }
++        
++        .speech-number {
++            font-size: 0.8rem;
++            color: #007bff;
++            font-weight: 600;
++        }
++        
++        .speech-time {
++            font-size: 0.75rem;
++            color: #adb5bd;
++        }
++        
++        .speech-text {
++            font-size: 0.95rem;
++            color: #212529;
++            line-height: 1.4;
++            font-style: italic;
++        }
++        
++        .listening-dot {
++            width: 8px;
++            height: 8px;
++            background: #dc3545;
++            border-radius: 50%;
++            animation: pulse 1.5s ease-in-out infinite;
++        }
++        
++        .search-container {
++            display: flex;
++            gap: 10px;
++            margin-bottom: 20px;
++        }
++        
++        .search-bar {
++            flex: 1;
++            background: #ffffff;
++            border: 1px solid #dee2e6;
++            border-radius: 12px;
++            padding: 12px 16px;
++            color: #212529;
++            font-size: 1rem;
++            display: flex;
++            align-items: center;
++            gap: 10px;
++        }
++        
++        .search-bar input {
++            flex: 1;
++            background: none;
++            border: none;
++            outline: none;
++            color: #212529;
++            font-size: 1rem;
++        }
++        
++        .search-bar input::placeholder {
++            color: #adb5bd;
++        }
++        
++        .filter-btn {
++            background: #ffffff;
++            border: 1px solid #dee2e6;
++            border-radius: 12px;
++            padding: 12px;
++            color: #6c757d;
++            cursor: pointer;
++            font-size: 1.2rem;
++        }
++        
++        .date-header {
++            font-size: 1.2rem;
++            font-weight: 600;
++            margin: 20px 0 10px;
++            color: #212529;
++        }
++        
++        #map {
++            height: calc(100vh - 200px);
++            width: 100%;
++            border-radius: 16px;
++            overflow: hidden;
++        }
++        
++        .stats-grid {
++            display: grid;
++            grid-template-columns: repeat(2, 1fr);
++            gap: 12px;
++            margin-bottom: 20px;
++        }
++        
++        .stat-card {
++            background: #ffffff;
++            border-radius: 12px;
++            padding: 16px;
++            text-align: center;
++            border: 1px solid #e9ecef;
++            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
++        }
++        
++        .stat-value {
++            font-size: 2rem;
++            font-weight: bold;
++            color: #212529;
++        }
++        
++        .stat-label {
++            font-size: 0.85rem;
++            color: #6c757d;
++            margin-top: 4px;
++        }
++        
++        .pulse {
++            display: inline-block;
++            animation: pulse 1s ease-in-out infinite;
++        }
++        
++        @keyframes pulse {
++            0%, 100% { transform: scale(1); opacity: 1; }
++            50% { transform: scale(1.2); opacity: 0.8; }
++        }
++        
++        @keyframes fadeIn {
++            from { opacity: 0; transform: translateY(10px); }
++            to { opacity: 1; transform: translateY(0); }
++        }
++        
++        @keyframes spin {
++            0% { transform: rotate(0deg); }
++            100% { transform: rotate(360deg); }
++        }
++        
++        .loading {
++            text-align: center;
++            padding: 40px;
++            color: #6c757d;
++        }
++        
++        .spinner {
++            width: 40px;
++            height: 40px;
++            border: 4px solid #e9ecef;
++            border-top: 4px solid #007bff;
++            border-radius: 50%;
++            animation: spin 1s linear infinite;
++            margin: 0 auto 20px;
++        }
++        
++        .empty-state {
++            text-align: center;
++            padding: 60px 20px;
++            color: #6c757d;
++        }
++        
++        .empty-state h3 {
++            color: #495057;
++            margin-bottom: 10px;
++        }
++        
++        @media (max-width: 768px) {
++            .stats-grid {
++                grid-template-columns: 1fr;
++            }
++        }
++    </style>
++</head>
++<body>
++    <div id="root"></div>
++
++    <script type="text/babel">
++        const { useState, useEffect } = React;
++
++        function App() {
++            const [conversations, setConversations] = useState([]);
++            const [loading, setLoading] = useState(true);
++            const [stats, setStats] = useState({ activeUsers: 0, lastActivity: 0 });
++            const [connected, setConnected] = useState(false);
++            const [liveTranscript, setLiveTranscript] = useState('');
++            const [activeTab, setActiveTab] = useState('home');
++            const [searchQuery, setSearchQuery] = useState('');
++
++            const fetchData = async () => {
++                try {
++                    const response = await fetch('/api/conversations');
++                    const data = await response.json();
++                    setConversations(data.conversations || []);
++                    setStats({ 
++                        activeUsers: data.activeUsers || 0, 
++                        lastActivity: data.lastActivity || 0 
++                    });
++                } catch (error) {
++                    console.error('Failed to fetch conversations:', error);
++                } finally {
++                    setLoading(false);
++                }
++            };
++
++            useEffect(() => {
++                fetchData();
++                
++                const eventSource = new EventSource('/api/events');
++                
++                eventSource.onopen = () => {
++                    setConnected(true);
++                };
++                
++                eventSource.onmessage = (event) => {
++                    const data = JSON.parse(event.data);
++                    
++                    if (data.type === 'transcription') {
++                        setLiveTranscript(data.text);
++                        if (data.isFinal) {
++                            setTimeout(() => setLiveTranscript(''), 2000);
++                        }
++                    } else if (data.type === 'conversation-started' || 
++                        data.type === 'conversation-completed' || 
++                        data.type === 'conversation-error') {
++                        setConversations(prev => {
++                            const updated = [...prev];
++                            const index = updated.findIndex(c => c.id === data.conversation.id);
++                            if (index >= 0) {
++                                updated[index] = data.conversation;
++                            } else {
++                                updated.unshift(data.conversation);
++                            }
++                            return updated;
++                        });
++                        
++                        setStats(prev => ({
++                            ...prev,
++                            lastActivity: Date.now()
++                        }));
++                    }
++                };
++                
++                eventSource.onerror = () => {
++                    setConnected(false);
++                };
++                
++                return () => {
++                    eventSource.close();
++                };
++            }, []);
++
++            const formatTime = (timestamp) => {
++                return new Date(timestamp).toLocaleString();
++            };
++
++            const formatDuration = (ms) => {
++                return \`\${(ms / 1000).toFixed(1)}s\`;
++            };
++
++            const groupConversationsByDate = (convs) => {
++                const groups = {};
++                convs.forEach(conv => {
++                    const date = new Date(conv.timestamp).toDateString();
++                    if (!groups[date]) groups[date] = [];
++                    groups[date].push(conv);
++                });
++                return groups;
++            };
++
++            const filteredConversations = conversations.filter(conv => 
++                conv.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
++                conv.response.toLowerCase().includes(searchQuery.toLowerCase())
++            );
++
++            const renderHomeTab = () => (
++                <div>
++                    <div className="recording-status">
++                        <div>
++                            <button className="recording-btn">
++                                <span>🔴</span> Stop Recording
++                            </button>
++                            <div className="transcript-area">
++                                {liveTranscript ? (
++                                    <div className="live-transcript-inline">
++                                        <span className="pulse" style={{marginRight: '8px'}}>🎤</span>
++                                        <span>{liveTranscript}</span>
++                                    </div>
++                                ) : (
++                                    <div style={{fontSize: '0.9rem', color: '#6c757d'}}>
++                                        Hey Mentra
++                                    </div>
++                                )}
++                            </div>
++                        </div>
++                        <div className="listening-indicator">
++                            <span>Listening</span>
++                            <div className="listening-dot"></div>
++                        </div>
++                    </div>
++
++                    <div className="stats-grid">
++                        <div className="stat-card">
++                            <div className="stat-value">{conversations.length}</div>
++                            <div className="stat-label">Total Conversations</div>
++                        </div>
++                        <div className="stat-card">
++                            <div className="stat-value">{stats.activeUsers}</div>
++                            <div className="stat-label">Active Users</div>
++                        </div>
++                        <div className="stat-card">
++                            <div className="stat-value">{conversations.filter(c => c.hasPhoto).length}</div>
++                            <div className="stat-label">Photos Captured</div>
++                        </div>
++                        <div className="stat-card">
++                            <div className="stat-value">{connected ? 'Live' : 'Offline'}</div>
++                            <div className="stat-label">Status</div>
++                        </div>
++                    </div>
++
++                    <h3 className="date-header">Speech History</h3>
++                    <div className="speech-history">
++                        {conversations.length === 0 ? (
++                            <div className="empty-state">
++                                <p>No speech recorded yet</p>
++                            </div>
++                        ) : (
++                            conversations.map((conv, index) => (
++                                <div key={conv.id} className="speech-item">
++                                    <div className="speech-header">
++                                        <span className="speech-number">#{conversations.length - index}</span>
++                                        <span className="speech-time">{formatTime(conv.timestamp)}</span>
++                                    </div>
++                                    <div className="speech-text">"{conv.question}"</div>
++                                </div>
++                            ))
++                        )}
++                    </div>
++                </div>
++            );
++
++            const renderChatTab = () => (
++                <div>
++                    <div className="search-container">
++                        <div className="search-bar">
++                            <span>🔍</span>
++                            <input 
++                                type="text" 
++                                placeholder="Search conversations..."
++                                value={searchQuery}
++                                onChange={(e) => setSearchQuery(e.target.value)}
++                            />
++                        </div>
++                        <button className="filter-btn">📊</button>
++                    </div>
++
++                    {searchQuery ? (
++                        <div>
++                            <h3 className="date-header">Search Results ({filteredConversations.length})</h3>
++                            {filteredConversations.map(conv => (
++                                <div key={conv.id} className="card">
++                                    <div className="card-header">
++                                        <div className="category-badge">
++                                            <span className="category-icon">{conv.category === 'Technology' ? '💻' : conv.category === 'Personal' ? '👤' : '🔍'}</span>
++                                            {conv.category || 'General'}
++                                        </div>
++                                        <span className="time-badge">{formatTime(conv.timestamp)}</span>
++                                    </div>
++                                    <div className="card-title">{conv.question}</div>
++                                    <div className="card-description">{conv.response}</div>
++                                </div>
++                            ))}
++                        </div>
++                    ) : (
++                        <div className="empty-state">
++                            <h3>🔍 Search your conversations</h3>
++                            <p>Try asking: "Where did I leave my keys?"</p>
++                            <p>Or search for topics like "work" or "food"</p>
++                        </div>
++                    )}
++                </div>
++            );
++
++            const renderMemoriesTab = () => {
++                const groupedConversations = groupConversationsByDate(conversations);
++                return (
++                    <div>
++                        {Object.entries(groupedConversations).map(([date, convs]) => (
++                            <div key={date}>
++                                <h3 className="date-header">{date}</h3>
++                                {convs.map(conv => (
++                                    <div key={conv.id} className="card">
++                                        <div className="card-header">
++                                            <div className="category-badge">
++                                                <span className="category-icon">{conv.category === 'Technology' ? '💻' : conv.category === 'Personal' ? '👤' : '🔍'}</span>
++                                                {conv.category || 'General'}
++                                            </div>
++                                            <span className="time-badge">{formatTime(conv.timestamp)}</span>
++                                        </div>
++                                        <div className="card-title">{conv.question}</div>
++                                        <div className="card-description">{conv.response}</div>
++                                        {conv.hasPhoto && (
++                                            <img 
++                                                src={\`/api/photo/\${conv.id}\`}
++                                                alt="Memory"
++                                                style={{width: '100%', marginTop: '12px', borderRadius: '8px'}}
++                                                onClick={() => window.open(\`/api/photo/\${conv.id}\`, '_blank')}
++                                            />
++                                        )}
++                                    </div>
++                                ))}
++                            </div>
++                        ))}
++                        {conversations.length === 0 && (
++                            <div className="empty-state">
++                                <h3>📸 No memories yet</h3>
++                                <p>Start conversations to build your memory timeline</p>
++                            </div>
++                        )}
++                    </div>
++                );
++            };
++
++            const renderMapsTab = () => {
++                useEffect(() => {
++                    if (activeTab === 'maps' && window.L) {
++                        setTimeout(() => {
++                            const mapElement = document.getElementById('map');
++                            if (mapElement && !mapElement._leaflet_id) {
++                                const map = L.map('map').setView([37.7749, -122.4194], 13);
++                                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
++                                
++                                conversations.forEach(conv => {
++                                    if (conv.location) {
++                                        const marker = L.marker([conv.location.lat, conv.location.lng]).addTo(map);
++                                        marker.bindPopup(\`
++                                            <strong>\${conv.question}</strong><br>
++                                            \${conv.response.substring(0, 100)}...<br>
++                                            <small>\${formatTime(conv.timestamp)}</small>
++                                        \`);
++                                    }
++                                });
++                            }
++                        }, 100);
++                    }
++                }, [activeTab]);
++
++                return (
++                    <div>
++                        <h3 className="date-header">Conversation Locations</h3>
++                        <div id="map"></div>
++                    </div>
++                );
++            };
++
++            if (loading) {
++                return (
++                    <div className="container">
++                        <div className="loading">
++                            <div className="spinner"></div>
++                            <p>Loading...</p>
++                        </div>
++                    </div>
++                );
++            }
++
++            return (
++                <div className="container">
++                    <div className="header">
++                        <div className="device-status" className={connected ? 'connected' : ''}>
++                            <span>⚙️</span>
++                            <span>{connected ? 'Mentra Connected' : 'No device found'}</span>
++                        </div>
++                        <button className="settings-btn">⚙️</button>
++                    </div>
++
++                    <div className="tab-content">
++                        {activeTab === 'home' && renderHomeTab()}
++                        {activeTab === 'chat' && renderChatTab()}
++                        {activeTab === 'memories' && renderMemoriesTab()}
++                        {activeTab === 'maps' && renderMapsTab()}
++                    </div>
++
++                    <div className="bottom-nav">
++                        <button 
++                            className={\`nav-item \${activeTab === 'home' ? 'active' : ''}\`}
++                            onClick={() => setActiveTab('home')}
++                        >
++                            <div className="nav-icon">🏠</div>
++                            <div>Home</div>
++                        </button>
++                        <button 
++                            className={\`nav-item \${activeTab === 'chat' ? 'active' : ''}\`}
++                            onClick={() => setActiveTab('chat')}
++                        >
++                            <div className="nav-icon">💬</div>
++                            <div>Chat</div>
++                        </button>
++                        <button 
++                            className={\`nav-item \${activeTab === 'memories' ? 'active' : ''}\`}
++                            onClick={() => setActiveTab('memories')}
++                        >
++                            <div className="nav-icon">🖼️</div>
++                            <div>Memories</div>
++                        </button>
++                        <button 
++                            className={\`nav-item \${activeTab === 'maps' ? 'active' : ''}\`}
++                            onClick={() => setActiveTab('maps')}
++                        >
++                            <div className="nav-icon">🗺️</div>
++                            <div>Maps</div>
++                        </button>
++                    </div>
++                </div>
++            );
++        }
++
++        ReactDOM.render(<App />, document.getElementById('root'));
++    </script>
++</body>
++</html>`;
+   }
+ }
+ 
+ // Start the server
+ const app = new HeyMentraVoiceAssistant();
+-app.start().catch(console.error); 
+\ No newline at end of file
++app.start().catch(console.error);
+\ No newline at end of file

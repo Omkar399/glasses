@@ -5,6 +5,8 @@
   "scripts": {
     "start": "bun src/index.ts",
     "dev": "bun --hot src/index.ts",
+    "dev:node": "npx tsx --watch src/index.ts",
+    "start:node": "npx tsx src/index.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -12,12 +14,18 @@
   "license": "ISC",
   "description": "Always-listening MentraOS app that responds to 'hey mentra' with AI vision and voice",
   "dependencies": {
-    "@mentra/sdk": "^2.0.3",
+    "@google/genai": "^1.9.0",
     "@google/generative-ai": "^0.21.0",
-    "dotenv": "^16.4.5"
+    "@mentra/sdk": "^2.0.3",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.2.0",
+    "dotenv": "^16.4.5",
+    "mime": "^4.0.7",
+    "wavefile": "^11.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.0.0",
-    "@types/node": "^22.13.14"
+    "@types/node": "^22.13.14",
+    "tsx": "^4.20.3",
+    "typescript": "^5.0.0"
   }
-} 
+}
