@@ -48,11 +48,22 @@ class HeyMentraVoiceAssistant extends AppServer {
   private conversations: Map<string, ConversationEntry[]> = new Map(); // Store conversations by userId
   private activeUsers: Map<string, { lastActivity: number; sessionId: string }> = new Map(); // Track active users
 
+  // TWO-STAGE INTERACTION STATE
+  private listeningStates: Map<string, { 
+    isListening: boolean; 
+    timestamp: number; 
+    session: AppSession; 
+  }> = new Map(); // Track listening state per user
+  private readonly LISTENING_TIMEOUT = 10000; // 10 seconds to ask question after wake word
+
   constructor() {
     super({
       packageName: PACKAGE_NAME,
       apiKey: MENTRAOS_API_KEY,
       port: PORT,
+      // Enhanced server configuration for better reliability
+      healthCheck: true,
+      cookieSecret: 'hey-mentra-voice-assistant-secret-key-' + Date.now()
     });
 
     // Initialize Gemini AI
@@ -61,7 +72,7 @@ class HeyMentraVoiceAssistant extends AppServer {
     // Setup webview routes
     this.setupWebviewRoutes();
     
-    this.logger.info(`🚀 OPTIMIZED Hey Mentra Voice Assistant with WEBVIEW initialized`);
+    this.logger.info(`🚀 OPTIMIZED Hey Mentra Voice Assistant with ENHANCED CONNECTION SETTINGS initialized`);
   }
 
   /**
@@ -479,12 +490,51 @@ class HeyMentraVoiceAssistant extends AppServer {
 </html>`;
   }
 
+  /**
+   * Override to create AppSession with enhanced connection settings
+   */
+  protected createAppSession(userId: string): any {
+    const { AppSession } = require('@mentra/sdk');
+    
+    // Enhanced WebSocket configuration
+    const sessionConfig = {
+      packageName: PACKAGE_NAME,
+      apiKey: MENTRAOS_API_KEY,
+      userId: userId,
+      appServer: this,
+      // Enhanced connection settings
+      mentraOSWebsocketUrl: process.env.MENTRAOS_WEBSOCKET_URL || 'wss://prod.augmentos.cloud/app-ws',
+      autoReconnect: true,
+      maxReconnectAttempts: 5,  // Increase from default 3 to 5
+      reconnectDelay: 2000      // Increase from default 1000ms to 2000ms
+    };
+
+    this.logger.info(`🔧 Creating enhanced AppSession for user ${userId} with config:`, {
+      websocketUrl: sessionConfig.mentraOSWebsocketUrl,
+      autoReconnect: sessionConfig.autoReconnect,
+      maxReconnectAttempts: sessionConfig.maxReconnectAttempts,
+      reconnectDelay: sessionConfig.reconnectDelay
+    });
+
+    return new AppSession(sessionConfig);
+  }
+
   protected async onSession(session: AppSession, sessionId: string, userId: string): Promise<void> {
     this.logger.info(`🎙️ Session started for user ${userId} (sessionId: ${sessionId})`);
+    
+    // Enhanced connection monitoring and error handling
+    this.setupConnectionMonitoring(session, userId);
     
     // Initialize user state
     this.activePhotoRequests.set(userId, false);
     this.lastPhotoTime.set(userId, 0);
+    
+    // Initialize listening state for two-stage interaction
+    this.listeningStates.set(userId, { 
+      isListening: false, 
+      timestamp: 0, 
+      session: session 
+    });
     
     // WEBVIEW: Initialize user conversation storage and track active user
     if (!this.conversations.has(userId)) {
@@ -492,14 +542,9 @@ class HeyMentraVoiceAssistant extends AppServer {
     }
     this.activeUsers.set(userId, { lastActivity: Date.now(), sessionId });
     
-    // Show welcome message immediately (non-blocking)
-    setImmediate(() => {
-      try {
-        session.layouts.showTextWall("Hey Mentra is ready! Say 'Hey Mentra' + your question.");
-        this.logger.info(`✅ Welcome message shown for user ${userId}`);
-      } catch (error) {
-        this.logger.error(`❌ Failed to show welcome message for user ${userId}:`, error);
-      }
+    // Show welcome message with retry (non-blocking)
+    setImmediate(async () => {
+      await this.showWelcomeWithRetry(session, userId);
     });
 
     // Set up button press listener for testing (like camera stream example)
@@ -519,7 +564,7 @@ class HeyMentraVoiceAssistant extends AppServer {
           });
         } else {
           // Short press - show status
-          session.layouts.showTextWall("Voice assistant is listening for 'Hey Mentra'...", {durationMs: 3000});
+          this.showFeedbackAsync(session, "Voice assistant is ready. Say 'Hey Mentra' to start...", 3000);
         }
       });
       
@@ -528,7 +573,7 @@ class HeyMentraVoiceAssistant extends AppServer {
       this.logger.error(`❌ Failed to set up button listener for user ${userId}:`, error);
     }
 
-    // Set up transcription listener (synchronous like camera stream example)
+    // Set up transcription listener with two-stage interaction and enhanced error handling
     try {
       session.events.onTranscription((data) => {
         try {
@@ -539,24 +584,68 @@ class HeyMentraVoiceAssistant extends AppServer {
           const spokenText = data.text.toLowerCase().trim();
           this.logger.info(`🎤 Final transcription for user ${userId}: "${spokenText}"`);
           
-          // Quick wake word detection
-          if (this.detectWakeWord(spokenText)) {
-            const question = this.extractQuestion(spokenText);
-            this.logger.info(`✨ Wake word detected for user ${userId}: "${question}"`);
+          const listeningState = this.listeningStates.get(userId);
+          
+          // Check if we're in listening mode (waiting for user question)
+          if (listeningState?.isListening) {
+            const timeSinceWakeWord = Date.now() - listeningState.timestamp;
+            
+            if (timeSinceWakeWord > this.LISTENING_TIMEOUT) {
+              // Timeout - reset listening state
+              this.logger.info(`⏰ Listening timeout for user ${userId}`);
+              this.resetListeningState(userId);
+              this.showFeedbackAsync(session, "Listening timeout. Say 'Hey Mentra' to try again.", 3000);
+              return;
+            }
+            
+            // Process the user's question
+            this.logger.info(`✨ Processing user question for ${userId}: "${spokenText}"`);
+            this.resetListeningState(userId);
             
             // Update last activity for webview
             this.activeUsers.set(userId, { lastActivity: Date.now(), sessionId });
             
-            // Non-blocking queue processing
+            // Process the question
             setImmediate(async () => {
               try {
-                await this.processRequest(question, session, userId);
+                await this.processRequest(spokenText, session, userId);
               } catch (error) {
                 this.logger.error(`❌ Failed to process request for user ${userId}:`, error);
               }
             });
           } else {
-            this.logger.debug(`🔇 No wake word detected in: "${spokenText}"`);
+            // Check for wake word detection
+            if (this.detectWakeWord(spokenText)) {
+              this.logger.info(`✨ Wake word detected for user ${userId}`);
+              
+              // Enter listening mode
+              this.listeningStates.set(userId, {
+                isListening: true,
+                timestamp: Date.now(),
+                session: session
+              });
+              
+              // Update last activity for webview
+              this.activeUsers.set(userId, { lastActivity: Date.now(), sessionId });
+              
+              // Respond with "I'm listening" message with retry
+              setImmediate(async () => {
+                await this.speakWithRetry(session, "I'm listening, how can I help?", userId);
+                this.showFeedbackAsync(session, "🎤 I'm listening, how can I help?", 8000);
+              });
+              
+              // Set timeout to reset listening state
+              setTimeout(() => {
+                const currentState = this.listeningStates.get(userId);
+                if (currentState?.isListening && currentState.timestamp === this.listeningStates.get(userId)?.timestamp) {
+                  this.logger.info(`⏰ Auto-resetting listening state for user ${userId}`);
+                  this.resetListeningState(userId);
+                }
+              }, this.LISTENING_TIMEOUT);
+              
+            } else {
+              this.logger.debug(`🔇 No wake word detected in: "${spokenText}"`);
+            }
           }
         } catch (error) {
           this.logger.error(`❌ Error in transcription handler for user ${userId}:`, error);
@@ -566,6 +655,97 @@ class HeyMentraVoiceAssistant extends AppServer {
       this.logger.info(`✅ Transcription listener set up successfully for user ${userId}`);
     } catch (error) {
       this.logger.error(`❌ Failed to set up transcription listener for user ${userId}:`, error);
+    }
+  }
+
+  /**
+   * Enhanced connection monitoring and error handling
+   */
+  private setupConnectionMonitoring(session: AppSession, userId: string): void {
+    try {
+      // Monitor connection state
+      session.events.onConnected(() => {
+        this.logger.info(`✅ WebSocket connected for user ${userId}`);
+      });
+
+      session.events.onDisconnected(() => {
+        this.logger.warn(`⚠️ WebSocket disconnected for user ${userId}`);
+        // Clean up user state on disconnect
+        this.resetListeningState(userId);
+      });
+
+      session.events.onError((error) => {
+        this.logger.error(`❌ WebSocket error for user ${userId}:`, error);
+        // Attempt to recover by resetting listening state
+        this.resetListeningState(userId);
+      });
+
+      this.logger.info(`✅ Connection monitoring set up for user ${userId}`);
+    } catch (error) {
+      this.logger.error(`❌ Failed to set up connection monitoring for user ${userId}:`, error);
+    }
+  }
+
+  /**
+   * Show welcome message with retry logic
+   */
+  private async showWelcomeWithRetry(session: AppSession, userId: string): Promise<void> {
+    const maxRetries = 3;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        session.layouts.showTextWall("Hey Mentra is ready! Say 'Hey Mentra' to start.");
+        this.logger.info(`✅ Welcome message shown for user ${userId} (attempt ${attempt})`);
+        return;
+      } catch (error) {
+        this.logger.warn(`⚠️ Welcome message attempt ${attempt} failed for user ${userId}:`, error);
+        
+        if (attempt === maxRetries) {
+          this.logger.error(`❌ All welcome message attempts failed for user ${userId}`);
+        } else {
+          // Brief delay before retry
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    }
+  }
+
+  /**
+   * Enhanced TTS with retry specifically for wake word responses
+   */
+  private async speakWithRetry(session: AppSession, message: string, userId: string): Promise<void> {
+    const maxRetries = 3;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        this.logger.info(`🗣️ TTS attempt ${attempt}/${maxRetries} for user ${userId}: "${message}"`);
+        
+        const result = await Promise.race([
+          session.audio.speak(message),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`TTS timeout attempt ${attempt}`)), 8000)
+          )
+        ]) as any;
+        
+        if (result.success) {
+          this.logger.info(`✅ TTS successful for user ${userId} on attempt ${attempt}`);
+          return;
+        } else {
+          throw new Error(result.error || 'TTS failed');
+        }
+        
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`🗣️ TTS attempt ${attempt} failed for user ${userId}: ${errorMessage}`);
+        
+        if (attempt === maxRetries) {
+          this.logger.info(`🗣️ All TTS attempts failed for user ${userId}, using text fallback`);
+          return;
+        }
+        
+        // Brief delay before retry
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
     }
   }
 
@@ -733,9 +913,9 @@ class HeyMentraVoiceAssistant extends AppServer {
         this.logger.info(`🤖 Text processing attempt ${attempt}/${maxRetries}`);
         
         const model = this.gemini.getGenerativeModel({ 
-          model: "gemini-1.5-flash",
+          model: "gemini-2.5-flash-lite-preview-06-17",
           generationConfig: {
-            maxOutputTokens: 100,
+            maxOutputTokens: 500,
             temperature: 0.7
           }
         });
@@ -957,6 +1137,20 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
     }
     
     return "What do you see?";
+  }
+
+  /**
+   * Reset listening state for a user
+   */
+  private resetListeningState(userId: string): void {
+    const currentState = this.listeningStates.get(userId);
+    if (currentState) {
+      this.listeningStates.set(userId, {
+        isListening: false,
+        timestamp: 0,
+        session: currentState.session
+      });
+    }
   }
 }
 
