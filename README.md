@@ -9,6 +9,22 @@ A MentraOS app that continuously listens for "Hey Mentra" and responds using AI 
 - 🧠 **AI Understanding**: Uses Google Gemini AI to understand both your question and the visual context
 - 🗣️ **Natural Voice**: Responds using ElevenLabs text-to-speech with natural-sounding voice
 - 👓 **Smart Glasses Integration**: Optimized for MentraOS smart glasses experience
+- 📱 **Mobile Webview**: Real-time dashboard showing conversation history and photos
+- ⚡ **Real-time Updates**: Live conversation tracking with auto-refresh
+- 🖼️ **Photo Gallery**: View and interact with captured moments
+
+## 🌐 Webview Dashboard
+
+The app includes a mobile-optimized React webview accessible at:
+- **URL**: `https://fitting-foal-blindly.ngrok-free.app/webview` (or `localhost:3000/webview`)
+- **Features**: 
+  - Real-time conversation history
+  - Photo gallery with full-size viewing
+  - Processing time analytics
+  - Active user tracking
+  - Mobile-responsive design with glassmorphism UI
+
+For detailed webview documentation, see [WEBVIEW_DOCUMENTATION.md](./WEBVIEW_DOCUMENTATION.md).
 
 ## Prerequisites
 

@@ -1,4 +1,4 @@
-import { AppServer, AppSession, PhotoData } from '@mentra/sdk';
+import { AppServer, AppSession, PhotoData, AuthenticatedRequest } from '@mentra/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as dotenv from 'dotenv';
 
@@ -11,10 +11,31 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? (() => { throw new Error('G
 const PORT = parseInt(process.env.PORT || '3000');
 
 /**
- * SUPER OPTIMIZED Voice Assistant App with Enhanced Async/Await
+ * Interface for storing conversation data for webview display
+ */
+interface ConversationEntry {
+  id: string;
+  timestamp: number;
+  userId: string;
+  question: string;
+  response: string;
+  hasPhoto: boolean;
+  photoData?: {
+    requestId: string;
+    mimeType: string;
+    buffer: Buffer;
+  };
+  processingTime: number;
+  status: 'processing' | 'completed' | 'error';
+}
+
+/**
+ * SUPER OPTIMIZED Voice Assistant App with Enhanced Async/Await + WEBVIEW
  * - Robust promise handling with retries
  * - Non-blocking asynchronous operations
  * - Fail-safe async patterns
+ * - Mobile-optimized React webview integration
+ * - Real-time conversation data display
  */
 class HeyMentraVoiceAssistant extends AppServer {
   private gemini: GoogleGenerativeAI;
@@ -22,6 +43,10 @@ class HeyMentraVoiceAssistant extends AppServer {
   private requestQueue: Array<{ question: string; session: AppSession; userId: string; timestamp: number }> = [];
   private activePhotoRequests: Map<string, boolean> = new Map(); // Track active photo requests per user
   private lastPhotoTime: Map<string, number> = new Map(); // Track last photo time per user
+  
+  // WEBVIEW DATA STORAGE
+  private conversations: Map<string, ConversationEntry[]> = new Map(); // Store conversations by userId
+  private activeUsers: Map<string, { lastActivity: number; sessionId: string }> = new Map(); // Track active users
 
   constructor() {
     super({
@@ -33,7 +58,425 @@ class HeyMentraVoiceAssistant extends AppServer {
     // Initialize Gemini AI
     this.gemini = new GoogleGenerativeAI(GEMINI_API_KEY);
     
-    this.logger.info(`🚀 OPTIMIZED Hey Mentra Voice Assistant initialized`);
+    // Setup webview routes
+    this.setupWebviewRoutes();
+    
+    this.logger.info(`🚀 OPTIMIZED Hey Mentra Voice Assistant with WEBVIEW initialized`);
+  }
+
+  /**
+   * WEBVIEW SETUP - Mobile-optimized React UI served directly from index.ts
+   */
+  private setupWebviewRoutes(): void {
+    const app = this.getExpressApp();
+
+    // API endpoint to get conversation history for authenticated user
+    app.get('/api/conversations', (req: any, res: any) => {
+      const userId = (req as AuthenticatedRequest).authUserId;
+
+      if (!userId) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const userConversations = this.conversations.get(userId) || [];
+      const sanitizedConversations = userConversations.map(conv => ({
+        id: conv.id,
+        timestamp: conv.timestamp,
+        question: conv.question,
+        response: conv.response,
+        hasPhoto: conv.hasPhoto,
+        processingTime: conv.processingTime,
+        status: conv.status
+      }));
+
+      res.json({
+        conversations: sanitizedConversations,
+        activeUsers: Array.from(this.activeUsers.keys()).length,
+        lastActivity: this.activeUsers.get(userId)?.lastActivity || 0
+      });
+    });
+
+    // API endpoint to get photo data
+    app.get('/api/photo/:conversationId', (req: any, res: any) => {
+      const userId = (req as AuthenticatedRequest).authUserId;
+      const conversationId = req.params.conversationId;
+
+      if (!userId) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const userConversations = this.conversations.get(userId) || [];
+      const conversation = userConversations.find(conv => conv.id === conversationId);
+      
+      if (!conversation || !conversation.photoData) {
+        res.status(404).json({ error: 'Photo not found' });
+        return;
+      }
+
+      res.set({
+        'Content-Type': conversation.photoData.mimeType,
+        'Cache-Control': 'no-cache'
+      });
+      res.send(conversation.photoData.buffer);
+    });
+
+    // Main webview route - serves React UI
+    app.get('/webview', async (req: any, res: any) => {
+      const userId = (req as AuthenticatedRequest).authUserId;
+
+      if (!userId) {
+        res.status(401).send(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Hey Mentra - Not Authenticated</title>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #1a1a1a; color: white;">
+              <h1>🔒 Please open this page from the MentraOS app</h1>
+            </body>
+          </html>
+        `);
+        return;
+      }
+
+      // Serve the React-based mobile UI
+      const html = this.generateReactWebviewHTML();
+      res.send(html);
+    });
+  }
+
+  /**
+   * Generate mobile-optimized React UI HTML (all-in-one file approach)
+   */
+  private generateReactWebviewHTML(): string {
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hey Mentra - Voice Assistant</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 100%;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .logo {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #fff, #f0f0f0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .status {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+            gap: 10px;
+        }
+        
+        .status-card {
+            flex: 1;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+        
+        .conversation-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .conversation-item {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .conversation-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        
+        .conversation-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .timestamp {
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+        
+        .status-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        
+        .status-completed { background: #4CAF50; }
+        .status-processing { background: #FF9800; }
+        .status-error { background: #F44336; }
+        
+        .question {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #FFE082;
+        }
+        
+        .response {
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        
+        .photo-container {
+            margin-top: 15px;
+        }
+        
+        .photo {
+            width: 100%;
+            max-width: 300px;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        
+        .photo:hover {
+            transform: scale(1.05);
+        }
+        
+        .processing-time {
+            font-size: 0.8rem;
+            opacity: 0.7;
+            text-align: right;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            opacity: 0.7;
+        }
+        
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .refresh-btn:hover {
+            transform: scale(1.1);
+        }
+        
+        @media (max-width: 768px) {
+            .container { padding: 15px; }
+            .status { flex-direction: column; }
+            .logo { font-size: 2rem; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function App() {
+            const [conversations, setConversations] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [stats, setStats] = useState({ activeUsers: 0, lastActivity: 0 });
+
+            const fetchData = async () => {
+                try {
+                    const response = await fetch('/api/conversations');
+                    const data = await response.json();
+                    setConversations(data.conversations || []);
+                    setStats({ 
+                        activeUsers: data.activeUsers || 0, 
+                        lastActivity: data.lastActivity || 0 
+                    });
+                } catch (error) {
+                    console.error('Failed to fetch conversations:', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            useEffect(() => {
+                fetchData();
+                const interval = setInterval(fetchData, 3000); // Auto-refresh every 3 seconds
+                return () => clearInterval(interval);
+            }, []);
+
+            const formatTime = (timestamp) => {
+                return new Date(timestamp).toLocaleTimeString();
+            };
+
+            const formatDuration = (ms) => {
+                return \`\${(ms / 1000).toFixed(1)}s\`;
+            };
+
+            if (loading) {
+                return (
+                    <div className="container">
+                        <div className="loading">
+                            <div className="spinner"></div>
+                            <p>Loading conversations...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="container">
+                    <div className="header">
+                        <div className="logo">👓 Hey Mentra</div>
+                        <p>Voice Assistant Dashboard</p>
+                    </div>
+
+                    <div className="status">
+                        <div className="status-card">
+                            <div style={{fontSize: '1.5rem', fontWeight: 'bold'}}>{conversations.length}</div>
+                            <div>Conversations</div>
+                        </div>
+                        <div className="status-card">
+                            <div style={{fontSize: '1.5rem', fontWeight: 'bold'}}>{stats.activeUsers}</div>
+                            <div>Active Users</div>
+                        </div>
+                        <div className="status-card">
+                            <div style={{fontSize: '1.5rem', fontWeight: 'bold'}}>
+                                {stats.lastActivity ? formatTime(stats.lastActivity) : '--'}
+                            </div>
+                            <div>Last Activity</div>
+                        </div>
+                    </div>
+
+                    <div className="conversation-list">
+                        {conversations.length === 0 ? (
+                            <div className="empty-state">
+                                <h3>🎙️ No conversations yet</h3>
+                                <p>Start talking to your Mentra glasses!</p>
+                                <p>Say "Hey Mentra" + your question</p>
+                            </div>
+                        ) : (
+                            conversations.map(conv => (
+                                <div key={conv.id} className="conversation-item">
+                                    <div className="conversation-header">
+                                        <span className="timestamp">{formatTime(conv.timestamp)}</span>
+                                        <span className={\`status-badge status-\${conv.status}\`}>
+                                            {conv.status}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="question">
+                                        🎤 "{conv.question}"
+                                    </div>
+                                    
+                                    <div className="response">
+                                        🤖 {conv.response}
+                                    </div>
+                                    
+                                    {conv.hasPhoto && (
+                                        <div className="photo-container">
+                                            <img 
+                                                src={\`/api/photo/\${conv.id}\`}
+                                                alt="Captured moment"
+                                                className="photo"
+                                                onClick={() => window.open(\`/api/photo/\${conv.id}\`, '_blank')}
+                                            />
+                                        </div>
+                                    )}
+                                    
+                                    <div className="processing-time">
+                                        ⚡ Processed in {formatDuration(conv.processingTime)}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    <button className="refresh-btn" onClick={fetchData} title="Refresh">
+                        🔄
+                    </button>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>`;
   }
 
   protected async onSession(session: AppSession, sessionId: string, userId: string): Promise<void> {
@@ -42,6 +485,12 @@ class HeyMentraVoiceAssistant extends AppServer {
     // Initialize user state
     this.activePhotoRequests.set(userId, false);
     this.lastPhotoTime.set(userId, 0);
+    
+    // WEBVIEW: Initialize user conversation storage and track active user
+    if (!this.conversations.has(userId)) {
+      this.conversations.set(userId, []);
+    }
+    this.activeUsers.set(userId, { lastActivity: Date.now(), sessionId });
     
     // Show welcome message immediately (non-blocking)
     setImmediate(() => {
@@ -95,6 +544,9 @@ class HeyMentraVoiceAssistant extends AppServer {
             const question = this.extractQuestion(spokenText);
             this.logger.info(`✨ Wake word detected for user ${userId}: "${question}"`);
             
+            // Update last activity for webview
+            this.activeUsers.set(userId, { lastActivity: Date.now(), sessionId });
+            
             // Non-blocking queue processing
             setImmediate(async () => {
               try {
@@ -122,11 +574,14 @@ class HeyMentraVoiceAssistant extends AppServer {
     this.activePhotoRequests.delete(userId);
     this.lastPhotoTime.delete(userId);
     
+    // WEBVIEW: Remove from active users but keep conversation history
+    this.activeUsers.delete(userId);
+    
     this.logger.info(`🎙️ Session stopped for user ${userId}, reason: ${reason}`);
   }
 
   /**
-   * ENHANCED: Async queue-based request processing
+   * ENHANCED: Async queue-based request processing with WEBVIEW data storage
    */
   private async processRequest(question: string, session: AppSession, userId: string): Promise<void> {
     // Add to queue
@@ -139,13 +594,38 @@ class HeyMentraVoiceAssistant extends AppServer {
   }
 
   /**
-   * ENHANCED: Fully async queue processing with better error isolation
+   * ENHANCED: Fully async queue processing with webview data storage
    */
   private async processQueueAsync(): Promise<void> {
     if (this.requestQueue.length === 0 || this.isProcessingRequest) return;
     
     this.isProcessingRequest = true;
     const request = this.requestQueue.shift()!;
+    
+    // WEBVIEW: Create conversation entry
+    const conversationId = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const startTime = Date.now();
+    
+    const conversationEntry: ConversationEntry = {
+      id: conversationId,
+      timestamp: startTime,
+      userId: request.userId,
+      question: request.question,
+      response: '',
+      hasPhoto: false,
+      processingTime: 0,
+      status: 'processing'
+    };
+    
+    // Add to user's conversation list
+    const userConversations = this.conversations.get(request.userId) || [];
+    userConversations.unshift(conversationEntry); // Add to beginning for latest-first display
+    this.conversations.set(request.userId, userConversations);
+    
+    // Keep only last 50 conversations per user to prevent memory issues
+    if (userConversations.length > 50) {
+      userConversations.splice(50);
+    }
     
     try {
       // Show immediate feedback (non-blocking)
@@ -155,13 +635,24 @@ class HeyMentraVoiceAssistant extends AppServer {
       const parallelOperations = await this.executeParallelOperations(request, request.userId);
       
       // Process results with fallback chain
-      const finalResponse = await this.processResults(parallelOperations, request.question);
+      const finalResponse = await this.processResults(parallelOperations, request.question, conversationEntry);
+      
+      // Update conversation entry with results
+      conversationEntry.response = finalResponse;
+      conversationEntry.processingTime = Date.now() - startTime;
+      conversationEntry.status = 'completed';
       
       // ENHANCED TTS with retry mechanism
       await this.speakResponseWithRetry(request.session, finalResponse);
       
     } catch (error) {
       this.logger.error(`❌ Request failed:`, error);
+      
+      // Update conversation entry with error
+      conversationEntry.response = "Sorry, I encountered an error. Please try again.";
+      conversationEntry.processingTime = Date.now() - startTime;
+      conversationEntry.status = 'error';
+      
       // Async error response (non-blocking)
       setImmediate(async () => {
         await this.speakResponseWithRetry(request.session, "Sorry, please try again.");
@@ -289,7 +780,8 @@ Give a helpful 1-sentence response. Be conversational for text-to-speech.`;
    */
   private async processResults(
     results: PromiseSettledResult<any>[], 
-    question: string
+    question: string,
+    conversationEntry: ConversationEntry
   ): Promise<string> {
     const [photoResult, textOnlyResult] = results;
     
@@ -298,7 +790,14 @@ Give a helpful 1-sentence response. Be conversational for text-to-speech.`;
       this.logger.info(`📸 Photo captured, processing with vision...`);
       
       try {
-        return await this.safeVisionProcessing(question, photoResult.value);
+        const photoData = photoResult.value;
+        conversationEntry.hasPhoto = true;
+        conversationEntry.photoData = {
+          requestId: conversationEntry.id,
+          mimeType: photoData.mimeType,
+          buffer: photoData.buffer
+        };
+        return await this.safeVisionProcessing(question, photoData);
       } catch (error) {
         this.logger.warn(`🤖 Vision processing failed, falling back to text-only`);
       }
