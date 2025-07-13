@@ -33,6 +33,54 @@ interface ConversationEntry {
     address?: string;
   };
   category?: string; // e.g., 'Technology', 'Personal', 'Work'
+  // STEP TRACKING INTEGRATION
+  stepNumber?: number;
+  projectId?: string;
+  isStepEntry?: boolean;
+}
+
+/**
+ * Interface for tracking individual steps in any task
+ */
+interface StepEntry {
+  id: string;
+  stepNumber: number;
+  timestamp: number;
+  userId: string;
+  action: string;          // User's request
+  response: string;        // AI's response  
+  context: string;         // Previous steps context
+  isCompleted: boolean;
+  projectId: string;
+  projectName: string;
+  hasPhoto: boolean;
+  photoData?: {
+    requestId: string;
+    mimeType: string;
+    buffer: Buffer;
+  };
+  processingTime: number;
+  status: 'processing' | 'completed' | 'error' | 'skipped';
+}
+
+/**
+ * Interface for tracking multi-step projects/guides
+ */
+interface ProjectEntry {
+  id: string;
+  name: string;
+  userId: string;
+  description: string;
+  taskType: 'tech' | 'repair' | 'household' | 'automotive' | 'coding' | 'creative' | 'general';
+  startedAt: number;
+  lastUpdated: number;
+  steps: StepEntry[];
+  isActive: boolean;
+  tags: string[];
+  totalSteps: number;
+  completedSteps: number;
+  estimatedDuration?: string;
+  safetyLevel: 'low' | 'medium' | 'high';
 }
 
 /**
@@ -53,15 +101,32 @@ class HeyMentraVoiceAssistant extends AppServer {
   // WEBVIEW DATA STORAGE
   private conversations: Map<string, ConversationEntry[]> = new Map(); // Store conversations by userId
   private activeUsers: Map<string, { lastActivity: number; sessionId: string }> = new Map(); // Track active users
-  private sseClients: Map<string, any> = new Map(); // Store SSE response objects for real-time updates
+  private sseClients: Map<string, any> = new Map(); // Store SSE response objects
 
-  // TWO-STAGE INTERACTION STATE
+  // STEP TRACKING DATA STORAGE
+  private userSteps: Map<string, StepEntry[]> = new Map(); // Store steps by userId
+  private userProjects: Map<string, ProjectEntry[]> = new Map(); // Store projects by userId
+  private activeProjects: Map<string, string> = new Map(); // Track active project ID by userId
+  private stepCounters: Map<string, number> = new Map(); // Track step numbers per project
+
+  // TWO-STAGE INTERACTION STATE WITH SILENCE DETECTION
   private listeningStates: Map<string, { 
     isListening: boolean; 
     timestamp: number; 
-    session: AppSession; 
+    session: AppSession;
+    lastVoiceActivity: number; // Track last time we heard voice
+    silenceStartTime: number; // Track when silence started
+    hasSpokenSinceWakeWord: boolean; // Track if user has spoken since wake word
   }> = new Map(); // Track listening state per user
-  private readonly LISTENING_TIMEOUT = 10000; // 10 seconds to ask question after wake word
+  
+  // SILENCE DETECTION CONFIGURATION
+  private readonly SILENCE_TIMEOUT = 2500; // 2.5 seconds of silence after speech to stop listening
+  private readonly MAX_LISTENING_TIMEOUT = 45000; // 45 seconds maximum listening time as safety fallback
+  private readonly VOICE_ACTIVITY_THRESHOLD = 3; // Minimum characters to consider as voice activity
+
+  // OPERATION CANCELLATION TRACKING
+  private activeTTSOperations: Map<string, AbortController> = new Map(); // Track active TTS per user
+  private activeAIOperations: Map<string, AbortController> = new Map(); // Track active AI processing per user
 
   constructor() {
     super({
@@ -105,7 +170,10 @@ class HeyMentraVoiceAssistant extends AppServer {
         response: conv.response,
         hasPhoto: conv.hasPhoto,
         processingTime: conv.processingTime,
-        status: conv.status
+        status: conv.status,
+        stepNumber: conv.stepNumber,
+        projectId: conv.projectId,
+        isStepEntry: conv.isStepEntry
       }));
 
       res.json({
@@ -138,6 +206,84 @@ class HeyMentraVoiceAssistant extends AppServer {
         'Cache-Control': 'no-cache'
       });
       res.send(conversation.photoData.buffer);
+    });
+
+    // API endpoint to get step tracking data
+    app.get('/api/steps', (req: any, res: any) => {
+      const userId = (req as AuthenticatedRequest).authUserId;
+
+      if (!userId) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const userSteps = this.userSteps.get(userId) || [];
+      const userProjects = this.userProjects.get(userId) || [];
+      const activeProjectId = this.activeProjects.get(userId);
+
+      // Sanitize step data for client
+      const sanitizedSteps = userSteps.map(step => ({
+        id: step.id,
+        stepNumber: step.stepNumber,
+        timestamp: step.timestamp,
+        action: step.action,
+        response: step.response,
+        isCompleted: step.isCompleted,
+        projectId: step.projectId,
+        projectName: step.projectName,
+        hasPhoto: step.hasPhoto,
+        processingTime: step.processingTime,
+        status: step.status
+      }));
+
+      // Sanitize project data for client
+      const sanitizedProjects = userProjects.map(project => ({
+        id: project.id,
+        name: project.name,
+        description: project.description,
+        taskType: project.taskType,
+        startedAt: project.startedAt,
+        lastUpdated: project.lastUpdated,
+        isActive: project.isActive,
+        tags: project.tags,
+        totalSteps: project.totalSteps,
+        completedSteps: project.completedSteps,
+        estimatedDuration: project.estimatedDuration,
+        safetyLevel: project.safetyLevel
+      }));
+
+      res.json({
+        steps: sanitizedSteps,
+        projects: sanitizedProjects,
+        activeProjectId,
+        totalSteps: userSteps.length,
+        completedSteps: userSteps.filter(s => s.isCompleted).length
+      });
+    });
+
+    // API endpoint to get step photo data
+    app.get('/api/step-photo/:stepId', (req: any, res: any) => {
+      const userId = (req as AuthenticatedRequest).authUserId;
+      const stepId = req.params.stepId;
+
+      if (!userId) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const userSteps = this.userSteps.get(userId) || [];
+      const step = userSteps.find(s => s.id === stepId);
+      
+      if (!step || !step.photoData) {
+        res.status(404).json({ error: 'Step photo not found' });
+        return;
+      }
+
+      res.set({
+        'Content-Type': step.photoData.mimeType,
+        'Cache-Control': 'no-cache'
+      });
+      res.send(step.photoData.buffer);
     });
 
     // Main webview route - serves React UI
@@ -998,7 +1144,10 @@ class HeyMentraVoiceAssistant extends AppServer {
     this.listeningStates.set(userId, { 
       isListening: false, 
       timestamp: 0, 
-      session: session 
+      session: session,
+      lastVoiceActivity: Date.now(),
+      silenceStartTime: 0,
+      hasSpokenSinceWakeWord: false
     });
     
     // WEBVIEW: Initialize user conversation storage and track active user
@@ -1054,72 +1203,115 @@ class HeyMentraVoiceAssistant extends AppServer {
             });
           }
           
-          if (!data.isFinal) return;
-
+          // Process both partial and final transcriptions for silence detection
           const spokenText = data.text.toLowerCase().trim();
-          this.logger.info(`🎤 Final transcription for user ${userId}: "${spokenText}"`);
-          
           const listeningState = this.listeningStates.get(userId);
           
-          // Check if we're in listening mode (waiting for user question)
-          if (listeningState?.isListening) {
-            const timeSinceWakeWord = Date.now() - listeningState.timestamp;
+          // Handle wake word detection (only on final transcriptions)
+          if (data.isFinal && !listeningState?.isListening) {
+            this.logger.info(`🎤 Final transcription for user ${userId}: "${spokenText}"`);
             
-            if (timeSinceWakeWord > this.LISTENING_TIMEOUT) {
-              // Timeout - reset listening state
-              this.logger.info(`⏰ Listening timeout for user ${userId}`);
-              this.resetListeningState(userId);
-              this.showFeedbackAsync(session, "Listening timeout. Say 'Hey Mentra' to try again.", 3000);
-              return;
-            }
-            
-            // Process the user's question
-            this.logger.info(`✨ Processing user question for ${userId}: "${spokenText}"`);
-            this.resetListeningState(userId);
-            
-            // Update last activity for webview
-            this.activeUsers.set(userId, { lastActivity: Date.now(), sessionId });
-            
-            // Process the question
-            setImmediate(async () => {
-              try {
-                await this.processRequest(spokenText, session, userId);
-              } catch (error) {
-                this.logger.error(`❌ Failed to process request for user ${userId}:`, error);
-              }
-            });
-          } else {
-            // Check for wake word detection
             if (this.detectWakeWord(spokenText)) {
-              this.logger.info(`✨ Wake word detected for user ${userId}`);
+              this.logger.info(`🎯 Wake word detected for user ${userId}: "${spokenText}"`);
               
-              // Enter listening mode
+              // Start listening state with silence detection
               this.listeningStates.set(userId, {
                 isListening: true,
                 timestamp: Date.now(),
-                session: session
+                session: session,
+                lastVoiceActivity: Date.now(),
+                silenceStartTime: 0,
+                hasSpokenSinceWakeWord: false
               });
               
-              // Update last activity for webview
-              this.activeUsers.set(userId, { lastActivity: Date.now(), sessionId });
-              
-              // Respond with "I'm listening" message with retry
+              // Speak confirmation (non-blocking)
               setImmediate(async () => {
                 await this.speakWithRetry(session, "I'm listening, how can I help?", userId);
-                this.showFeedbackAsync(session, "🎤 I'm listening, how can I help?", 8000);
               });
               
-              // Set timeout to reset listening state
+              // Set maximum timeout as safety fallback
               setTimeout(() => {
                 const currentState = this.listeningStates.get(userId);
                 if (currentState?.isListening && currentState.timestamp === this.listeningStates.get(userId)?.timestamp) {
-                  this.logger.info(`⏰ Auto-resetting listening state for user ${userId}`);
+                  this.logger.info(`⏰ Maximum listening timeout reached for user ${userId}`);
                   this.resetListeningState(userId);
+                  setImmediate(async () => {
+                    await this.speakWithRetry(session, "Listening timeout. Say 'Hey Mentra' to try again.", userId);
+                  });
                 }
-              }, this.LISTENING_TIMEOUT);
+              }, this.MAX_LISTENING_TIMEOUT);
               
             } else {
               this.logger.debug(`🔇 No wake word detected in: "${spokenText}"`);
+            }
+            return;
+          }
+
+          // Handle listening state with silence detection
+          if (listeningState?.isListening) {
+            const now = Date.now();
+            const timeSinceWakeWord = now - listeningState.timestamp;
+            
+            // Safety check for maximum timeout
+            if (timeSinceWakeWord > this.MAX_LISTENING_TIMEOUT) {
+              this.logger.info(`⏰ Maximum listening timeout for user ${userId}`);
+              this.resetListeningState(userId);
+              setImmediate(async () => {
+                await this.speakWithRetry(session, "Listening timeout. Say 'Hey Mentra' to try again.", userId);
+              });
+              return;
+            }
+            
+            // Check for voice activity (both partial and final transcriptions)
+            if (spokenText && spokenText.length >= this.VOICE_ACTIVITY_THRESHOLD) {
+              // Voice activity detected
+              this.logger.debug(`🗣️ Voice activity detected for user ${userId}: "${spokenText}"`);
+              
+              // Update voice activity timestamp
+              listeningState.lastVoiceActivity = now;
+              listeningState.hasSpokenSinceWakeWord = true;
+              listeningState.silenceStartTime = 0; // Reset silence timer
+              
+              // If this is a final transcription and user has spoken, process it
+              if (data.isFinal && spokenText.length > 0) {
+                this.logger.info(`🎤 Processing question from user ${userId}: "${spokenText}"`);
+                
+                // FIXED: In two-stage mode, use the spoken text directly as the question
+                // Don't call extractQuestion() since wake word was already processed separately
+                const question = spokenText;
+                
+                // Reset listening state before processing
+                this.resetListeningState(userId);
+                
+                // Process the question (non-blocking)
+                setImmediate(async () => {
+                  await this.processRequest(question, session, userId);
+                });
+              }
+            } else {
+              // No significant voice activity in this transcription
+              if (listeningState.hasSpokenSinceWakeWord && listeningState.silenceStartTime === 0) {
+                // User has spoken before, start silence timer
+                listeningState.silenceStartTime = now;
+                this.logger.debug(`🤫 Silence started for user ${userId}`);
+              }
+              
+              // Check if silence timeout has been reached
+              if (listeningState.silenceStartTime > 0) {
+                const silenceDuration = now - listeningState.silenceStartTime;
+                
+                if (silenceDuration >= this.SILENCE_TIMEOUT) {
+                  this.logger.info(`🤫 Silence timeout (${silenceDuration}ms) reached for user ${userId}`);
+                  this.resetListeningState(userId);
+                  
+                  // Only give feedback if user hasn't spoken at all
+                  if (!listeningState.hasSpokenSinceWakeWord) {
+                    setImmediate(async () => {
+                      await this.speakWithRetry(session, "I didn't hear anything. Say 'Hey Mentra' to try again.", userId);
+                    });
+                  }
+                }
+              }
             }
           }
         } catch (error) {
@@ -1239,10 +1431,19 @@ class HeyMentraVoiceAssistant extends AppServer {
    * ENHANCED: Async queue-based request processing with WEBVIEW data storage
    */
   private async processRequest(question: string, session: AppSession, userId: string): Promise<void> {
-    // Add to queue
-    this.requestQueue.push({ question, session, userId, timestamp: Date.now() });
+    // Add to queue for processing
+    const request = { question, session, userId, timestamp: Date.now() };
+    this.requestQueue.push(request);
     
-    // Process if not already processing (non-blocking)
+    // Update last activity for webview (sessionId will be updated in onSession)
+    this.activeUsers.set(userId, { 
+      lastActivity: Date.now(), 
+      sessionId: this.activeUsers.get(userId)?.sessionId || 'unknown'
+    });
+    
+    this.logger.info(`📝 Request queued for user ${userId}. Queue length: ${this.requestQueue.length}`);
+    
+    // Process queue if not already processing
     if (!this.isProcessingRequest) {
       await this.processQueueAsync();
     }
@@ -1299,16 +1500,35 @@ class HeyMentraVoiceAssistant extends AppServer {
       // Show immediate feedback (non-blocking)
       this.showFeedbackAsync(request.session, "Processing...", 1000);
       
-      // ENHANCED PARALLEL PROCESSING with better promise handling
-      const parallelOperations = await this.executeParallelOperations(request, request.userId);
-      
-      // Process results with fallback chain
-      const finalResponse = await this.processResults(parallelOperations, request.question, conversationEntry);
+      // ENHANCED SEQUENTIAL PROCESSING with cancellation
+      const finalResponse = await this.executeSequentialOperations(request, request.userId, conversationEntry);
       
       // Update conversation entry with results
       conversationEntry.response = finalResponse;
       conversationEntry.processingTime = Date.now() - startTime;
       conversationEntry.status = 'completed';
+      
+      // STEP TRACKING: Create step entry if this is step-related
+      const isStepRequest = this.detectStepRequest(request.question);
+      const isStepContinuation = this.detectStepContinuation(request.question);
+      
+      if (isStepRequest || isStepContinuation) {
+        try {
+          const project = this.getOrCreateProject(request.userId, request.question);
+          const stepEntry = this.createStepEntry(request.userId, request.question, finalResponse, project, conversationEntry);
+          
+          // Broadcast step events
+          this.broadcastSSE(request.userId, {
+            type: 'step-created',
+            step: stepEntry,
+            project: project
+          });
+          
+          this.logger.info(`📋 Step tracking: Created step ${stepEntry.stepNumber} for project "${project.name}"`);
+        } catch (error) {
+          this.logger.error(`❌ Failed to create step entry:`, error);
+        }
+      }
       
       // Broadcast conversation completed event
       this.broadcastSSE(request.userId, {
@@ -1316,8 +1536,8 @@ class HeyMentraVoiceAssistant extends AppServer {
         conversation: conversationEntry
       });
       
-      // ENHANCED TTS with retry mechanism
-      await this.speakResponseWithRetry(request.session, finalResponse);
+      // ENHANCED TTS with cancellation
+      await this.speakResponseWithCancellation(request.session, finalResponse, request.userId);
       
     } catch (error) {
       this.logger.error(`❌ Request failed:`, error);
@@ -1335,7 +1555,7 @@ class HeyMentraVoiceAssistant extends AppServer {
       
       // Async error response (non-blocking)
       setImmediate(async () => {
-        await this.speakResponseWithRetry(request.session, "Sorry, please try again.");
+        await this.speakResponseWithCancellation(request.session, "Sorry, please try again.", request.userId);
       });
     } finally {
       this.isProcessingRequest = false;
@@ -1348,15 +1568,89 @@ class HeyMentraVoiceAssistant extends AppServer {
   }
 
   /**
-   * ENHANCED: Execute parallel operations with better promise management
+   * ENHANCED: Execute operations sequentially with proper cancellation
    */
-  private async executeParallelOperations(request: { question: string; session: AppSession; userId: string; timestamp: number }, userId: string) {
-    // Create promises that won't reject the entire Promise.allSettled
-    const photoPromise = this.safePhotoCapture(request.session, userId);
-    const textPromise = this.safeTextOnlyProcessing(request.question);
-    
-    // Execute in parallel with proper error isolation
-    return await Promise.allSettled([photoPromise, textPromise]);
+  private async executeSequentialOperations(request: { question: string; session: AppSession; userId: string; timestamp: number }, userId: string, conversationEntry: ConversationEntry): Promise<string> {
+    // Cancel any existing AI operations for this user
+    const existingController = this.activeAIOperations.get(userId);
+    if (existingController) {
+      existingController.abort();
+    }
+
+    // Create new abort controller for this operation
+    const controller = new AbortController();
+    this.activeAIOperations.set(userId, controller);
+
+    try {
+      // Check if request was cancelled
+      if (controller.signal.aborted) {
+        throw new Error('Operation cancelled');
+      }
+
+      // STEP TRACKING: Check if this is a step-based request
+      const isStepRequest = this.detectStepRequest(request.question);
+      const isStepContinuation = this.detectStepContinuation(request.question);
+      const isStepRelated = isStepRequest || isStepContinuation;
+
+      // Strategy 1: Try photo + vision processing first
+      try {
+        this.logger.info(`📸 Attempting photo capture for user ${userId}...`);
+        const photo = await this.safePhotoCapture(request.session, userId);
+        
+        if (photo && !controller.signal.aborted) {
+          this.logger.info(`📸 Photo captured, processing with vision...`);
+          
+          // ESSENTIAL: Store photo data in conversation entry
+          conversationEntry.hasPhoto = true;
+          conversationEntry.photoData = {
+            requestId: conversationEntry.id,
+            mimeType: photo.mimeType,
+            buffer: photo.buffer
+          };
+          
+          let visionResponse: string;
+          if (isStepRelated) {
+            visionResponse = await this.safeVisionProcessingWithSteps(request.question, photo, userId, controller.signal);
+          } else {
+            visionResponse = await this.safeVisionProcessing(request.question, photo, userId, controller.signal);
+          }
+          
+          if (visionResponse && !controller.signal.aborted) {
+            this.logger.info(`✅ Vision processing successful`);
+            return visionResponse;
+          }
+        }
+      } catch (error) {
+        if (controller.signal.aborted) {
+          throw new Error('Operation cancelled');
+        }
+        this.logger.warn(`📸 Photo + vision strategy failed: ${error}`);
+      }
+
+      // Strategy 2: Fallback to text-only processing
+      if (!controller.signal.aborted) {
+        this.logger.info(`📝 Falling back to text-only processing...`);
+        
+        let textResponse: string;
+        if (isStepRelated) {
+          textResponse = await this.safeTextProcessingWithSteps(request.question, userId, true, controller.signal);
+        } else {
+          textResponse = await this.safeTextOnlyProcessing(request.question, userId, controller.signal);
+        }
+        
+        if (textResponse && !controller.signal.aborted) {
+          this.logger.info(`✅ Text processing successful`);
+          return textResponse;
+        }
+      }
+
+      // Final fallback
+      return "I'm ready to help! Could you try asking your question again?";
+
+    } finally {
+      // Clean up controller
+      this.activeAIOperations.delete(userId);
+    }
   }
 
   /**
@@ -1410,13 +1704,18 @@ class HeyMentraVoiceAssistant extends AppServer {
   }
 
   /**
-   * ENHANCED: Safe text-only processing with retry
+   * ENHANCED: Safe text-only processing with conversation context and cancellation
    */
-  private async safeTextOnlyProcessing(question: string): Promise<string> {
+  private async safeTextOnlyProcessing(question: string, userId?: string, signal?: AbortSignal): Promise<string> {
     const maxRetries = 2;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        // Check if cancelled
+        if (signal?.aborted) {
+          throw new Error('Operation cancelled');
+        }
+
         this.logger.info(`🤖 Text processing attempt ${attempt}/${maxRetries}`);
         
         const model = this.gemini.getGenerativeModel({ 
@@ -1427,14 +1726,31 @@ class HeyMentraVoiceAssistant extends AppServer {
           }
         });
 
-        const prompt = `Smart glasses AI assistant. User asked: "${question}". 
+        let prompt: string;
+        
+        if (userId) {
+          // Include conversation context for personalized response
+          const conversationContext = this.buildConversationContext(userId, question);
+          prompt = `You are a smart glasses AI assistant. User asked: "${question}".
+
+${conversationContext}
+
+Give a helpful 1-2 sentence response. Be conversational for text-to-speech. Use conversation history to provide relevant, personalized responses.`;
+        } else {
+          // Fallback for when userId is not available
+          prompt = `Smart glasses AI assistant. User asked: "${question}". 
 Give a helpful 1-sentence response. Be conversational for text-to-speech.`;
+        }
 
         const result = await Promise.race([
           model.generateContent([prompt]),
           new Promise((_, reject) => 
             setTimeout(() => reject(new Error(`Gemini timeout attempt ${attempt}`)), 6000)
-          )
+          ),
+          // Add cancellation support
+          signal ? new Promise((_, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('Operation cancelled')));
+          }) : new Promise(() => {}) // No-op promise if no signal
         ]) as any;
         
         const response = await result.response;
@@ -1448,6 +1764,11 @@ Give a helpful 1-sentence response. Be conversational for text-to-speech.`;
         
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        if (errorMessage === 'Operation cancelled') {
+          throw error;
+        }
+        
         this.logger.warn(`🤖 Text processing attempt ${attempt} failed: ${errorMessage}`);
         
         if (attempt === maxRetries) {
@@ -1472,6 +1793,13 @@ Give a helpful 1-sentence response. Be conversational for text-to-speech.`;
   ): Promise<string> {
     const [photoResult, textOnlyResult] = results;
     
+    // STEP TRACKING: Check if this is a step-based request
+    const userId = conversationEntry.userId;
+    const isStepRequest = this.detectStepRequest(question);
+    const isStepContinuation = this.detectStepContinuation(question);
+    
+    let finalResponse: string;
+    
     // Try photo processing first if available
     if (photoResult.status === 'fulfilled' && photoResult.value) {
       this.logger.info(`📸 Photo captured, processing with vision...`);
@@ -1484,36 +1812,191 @@ Give a helpful 1-sentence response. Be conversational for text-to-speech.`;
           mimeType: photoData.mimeType,
           buffer: photoData.buffer
         };
-        return await this.safeVisionProcessing(question, photoData);
+        
+        // STEP TRACKING: Enhanced vision processing with step context
+        if (isStepRequest || isStepContinuation) {
+          finalResponse = await this.safeVisionProcessingWithSteps(question, photoData, userId);
+        } else {
+          finalResponse = await this.safeVisionProcessing(question, photoData, userId);
+        }
       } catch (error) {
         this.logger.warn(`🤖 Vision processing failed, falling back to text-only`);
+        finalResponse = await this.safeTextProcessingWithSteps(question, userId, isStepRequest || isStepContinuation);
+      }
+    } else {
+      // Use text-only result as fallback
+      if (textOnlyResult.status === 'fulfilled') {
+        this.logger.info(`📝 Using text-only response`);
+        
+        // STEP TRACKING: Enhanced text processing with step context
+        if (isStepRequest || isStepContinuation) {
+          finalResponse = await this.safeTextProcessingWithSteps(question, userId, true);
+        } else {
+          finalResponse = textOnlyResult.value;
+        }
+      } else {
+        // Final fallback
+        finalResponse = "I'm ready to help! Could you try asking your question again?";
       }
     }
     
-    // Use text-only result as fallback
-    if (textOnlyResult.status === 'fulfilled') {
-      this.logger.info(`📝 Using text-only response`);
-      return textOnlyResult.value;
+    // STEP TRACKING: Create step entry if this is step-related
+    if (isStepRequest || isStepContinuation) {
+      try {
+        const project = this.getOrCreateProject(userId, question);
+        const stepEntry = this.createStepEntry(userId, question, finalResponse, project, conversationEntry);
+        
+        // Broadcast step events
+        this.broadcastSSE(userId, {
+          type: 'step-created',
+          step: stepEntry,
+          project: project
+        });
+        
+        this.logger.info(`📋 Step tracking: Created step ${stepEntry.stepNumber} for project "${project.name}"`);
+      } catch (error) {
+        this.logger.error(`❌ Failed to create step entry:`, error);
+      }
     }
     
-    // Final fallback
-    return "I'm ready to help! Could you try asking your question again?";
+    return finalResponse;
   }
 
   /**
-   * ENHANCED: Safe vision processing with retry
+   * STEP TRACKING: Enhanced text processing with step context and cancellation
    */
-  private async safeVisionProcessing(question: string, photo: PhotoData): Promise<string> {
+  private async safeTextProcessingWithSteps(question: string, userId: string, isStepRelated: boolean, signal?: AbortSignal): Promise<string> {
+    if (!isStepRelated) {
+      return await this.safeTextOnlyProcessing(question, userId, signal);
+    }
+    
     const maxRetries = 2;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        this.logger.info(`🤖 Vision processing attempt ${attempt}/${maxRetries}`);
+        // Check if cancelled
+        if (signal?.aborted) {
+          throw new Error('Operation cancelled');
+        }
+
+        this.logger.info(`🤖 Step-aware text processing attempt ${attempt}/${maxRetries}`);
         
         const model = this.gemini.getGenerativeModel({ 
           model: "gemini-2.5-flash-lite-preview-06-17",
           generationConfig: {
-            maxOutputTokens: 150,
+            maxOutputTokens: 300,  // Reduced to force shorter responses
+            temperature: 0.7
+          }
+        });
+
+        // Build comprehensive context (conversation + steps)
+        const combinedContext = this.buildCombinedContext(userId, question, true);
+        const activeProject = this.getActiveProject(userId);
+        
+        let prompt: string;
+        if (this.detectStepRequest(question)) {
+          // New step-based task
+          prompt = `You are a smart glasses AI assistant helping with step-by-step tasks.
+
+User asked: "${question}"
+
+${combinedContext}
+
+CRITICAL INSTRUCTIONS:
+- Give ONLY the very first step to start this task
+- Do NOT list multiple steps or the entire process
+- Keep it to 1-2 sentences maximum
+- End by asking the user to complete this step and then ask "what's next?"
+- Be conversational and encouraging
+- Use conversation history to personalize your response
+
+Example format: "First, [action]. Once you've done that, say 'what's next?' and I'll guide you through the next step."
+
+Current project: ${activeProject?.name || 'New task'}
+Safety level: ${activeProject?.safetyLevel || 'low'}
+
+Give ONLY the first step now:`;
+
+        } else {
+          // Continuation of existing steps
+          prompt = `You are a smart glasses AI assistant continuing step-by-step guidance.
+
+User said: "${question}" (they completed the previous step and want the next one)
+
+${combinedContext}
+
+CRITICAL INSTRUCTIONS:
+- Give ONLY the very next single step
+- Do NOT list multiple future steps
+- Keep it to 1-2 sentences maximum
+- End by asking them to complete this step and say "what's next?" when done
+- Be conversational and encouraging
+- Reference previous conversation if relevant
+
+Example format: "Great! Now [next action]. Let me know when you've completed this step."
+
+Give ONLY the next step now:`;
+        }
+
+        const result = await Promise.race([
+          model.generateContent([prompt]),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`Step-aware processing timeout attempt ${attempt}`)), 8000)
+          ),
+          // Add cancellation support
+          signal ? new Promise((_, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('Operation cancelled')));
+          }) : new Promise(() => {}) // No-op promise if no signal
+        ]) as any;
+        
+        const response = await result.response;
+        const text = response.text();
+        
+        if (text && text.trim().length > 0) {
+          return text;
+        }
+        
+        throw new Error('Empty response from Gemini');
+        
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        if (errorMessage === 'Operation cancelled') {
+          throw error;
+        }
+        
+        this.logger.warn(`🤖 Step-aware processing attempt ${attempt} failed: ${errorMessage}`);
+        
+        if (attempt === maxRetries) {
+          return "I'm ready to help with your next step! What would you like to work on?";
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    return "I'm here to help! Could you repeat your question?";
+  }
+
+  /**
+   * STEP TRACKING: Enhanced vision processing with step context and cancellation
+   */
+  private async safeVisionProcessingWithSteps(question: string, photo: PhotoData, userId: string, signal?: AbortSignal): Promise<string> {
+    const maxRetries = 2;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Check if cancelled
+        if (signal?.aborted) {
+          throw new Error('Operation cancelled');
+        }
+
+        this.logger.info(`🤖 Step-aware vision processing attempt ${attempt}/${maxRetries}`);
+        
+        const model = this.gemini.getGenerativeModel({ 
+          model: "gemini-2.5-flash-lite-preview-06-17",
+          generationConfig: {
+            maxOutputTokens: 300,  // Reduced to force shorter responses
             temperature: 0.7
           }
         });
@@ -1522,11 +2005,32 @@ Give a helpful 1-sentence response. Be conversational for text-to-speech.`;
         let imageData = photo.buffer.toString('base64');
         if (imageData.length > 1000000) {
           this.logger.info(`🖼️ Large image detected, using text-only response`);
-          return await this.safeTextOnlyProcessing(question);
+          return await this.safeTextProcessingWithSteps(question, userId, true, signal);
         }
 
-        const prompt = `Smart glasses user asked: "${question}" about this image. 
-Give a helpful 1-2 sentence response for text-to-speech.`;
+        // Build comprehensive context (conversation + steps)
+        const combinedContext = this.buildCombinedContext(userId, question, true);
+
+        const prompt = `You are a smart glasses AI assistant with vision capabilities helping with step-by-step tasks.
+
+User asked: "${question}" about this image.
+
+${combinedContext}
+
+CRITICAL INSTRUCTIONS:
+- Look at the image and assess the current situation
+- Give ONLY the very next single step based on what you see
+- Do NOT list multiple future steps or entire process
+- Keep it to 1-2 sentences maximum
+- If you see the previous step is complete, give the next step
+- If you see issues or safety concerns, address them first
+- End by asking them to complete this step and say "what's next?" when done
+- Be conversational and encouraging
+- Use conversation history to provide personalized guidance
+
+Example format: "I can see [observation]. Now [next action]. Let me know when you've completed this step."
+
+Give ONLY the next step based on what you see:`;
 
         const result = await Promise.race([
           model.generateContent([
@@ -1534,8 +2038,12 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
             { inlineData: { data: imageData, mimeType: photo.mimeType } }
           ]),
           new Promise((_, reject) => 
-            setTimeout(() => reject(new Error(`Vision timeout attempt ${attempt}`)), 8000)
-          )
+            setTimeout(() => reject(new Error(`Step-aware vision timeout attempt ${attempt}`)), 10000)
+          ),
+          // Add cancellation support
+          signal ? new Promise((_, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('Operation cancelled')));
+          }) : new Promise(() => {}) // No-op promise if no signal
         ]) as any;
 
         const response = await result.response;
@@ -1549,19 +2057,22 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
         
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        this.logger.warn(`🤖 Vision processing attempt ${attempt} failed: ${errorMessage}`);
         
-        if (attempt === maxRetries) {
-          // Fallback to text-only processing
-          return await this.safeTextOnlyProcessing(question);
+        if (errorMessage === 'Operation cancelled') {
+          throw error;
         }
         
-        // Brief delay before retry
+        this.logger.warn(`🤖 Step-aware vision processing attempt ${attempt} failed: ${errorMessage}`);
+        
+        if (attempt === maxRetries) {
+          return await this.safeTextProcessingWithSteps(question, userId, true, signal);
+        }
+        
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
     
-    return await this.safeTextOnlyProcessing(question);
+    return await this.safeTextProcessingWithSteps(question, userId, true, signal);
   }
 
   /**
@@ -1657,7 +2168,7 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
     
       // Aggressive Slurring or Accentual Variants
       "h'mentra", 'aymentra', 'aymenta', 'hemtra', 'hementa', 'ammentra',
-      'yamentra', 'h’mentra', 'aymentrah', 'haimen'
+      'yamentra', 'h\'mentra', 'aymentrah', 'haimen'
     ];
     return wakeWords.some(word => text.includes(word));
   }
@@ -1677,6 +2188,325 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
       return 'Food';
     }
     return 'General';
+  }
+
+  /**
+   * STEP TRACKING: Detect if user is asking for step-by-step help
+   */
+  private detectStepRequest(question: string): boolean {
+    const stepKeywords = [
+      'help me build', 'help me create', 'help me make', 'help me setup', 'help me configure',
+      'help me install', 'help me fix', 'help me repair', 'help me change', 'help me replace',
+      'how to build', 'how to create', 'how to make', 'how to setup', 'how to configure',
+      'how to install', 'how to fix', 'how to repair', 'how to change', 'how to replace',
+      'how do i', 'how can i', 'walk me through', 'guide me through', 'show me how',
+      'step by step', 'tutorial', 'instructions', 'guide me', 'help me with',
+      'put my phone in', 'change my tv', 'connect my', 'set up my'
+    ];
+    
+    const q = question.toLowerCase();
+    const isStepRequest = stepKeywords.some(keyword => q.includes(keyword));
+    
+    // Log detection for debugging
+    if (isStepRequest) {
+      this.logger.info(`📋 Step request detected: "${question}"`);
+    }
+    
+    return isStepRequest;
+  }
+
+  /**
+   * STEP TRACKING: Detect if user is continuing a step sequence
+   */
+  private detectStepContinuation(question: string): boolean {
+    const continuationKeywords = [
+      'what\'s next', 'whats next', 'next step', 'what now', 'now what',
+      'continue', 'keep going', 'what\'s the next step', 'what should i do next',
+      'done', 'finished', 'completed', 'ready for next', 'next', 'ok', 'okay',
+      'got it', 'did it', 'finished that', 'completed that', 'ready'
+    ];
+    
+    const q = question.toLowerCase().trim();
+    
+    // Strong indicators of continuation
+    const isExplicitContinuation = continuationKeywords.some(keyword => q.includes(keyword));
+    
+    // Short responses often mean "continue" but only if there's an active project
+    const isShortResponse = q.length < 15;
+    
+    // Log detection for debugging
+    if (isExplicitContinuation || isShortResponse) {
+      this.logger.info(`📋 Step continuation detected: "${question}" (explicit: ${isExplicitContinuation}, short: ${isShortResponse})`);
+    }
+    
+    return isExplicitContinuation || isShortResponse;
+  }
+
+  /**
+   * STEP TRACKING: Extract project name and type from task description
+   */
+  private extractProjectInfo(taskDescription: string): { name: string; type: ProjectEntry['taskType']; safetyLevel: ProjectEntry['safetyLevel'] } {
+    const q = taskDescription.toLowerCase();
+    
+    // Determine project type and safety level
+    let type: ProjectEntry['taskType'] = 'general';
+    let safetyLevel: ProjectEntry['safetyLevel'] = 'low';
+    
+    if (q.includes('website') || q.includes('app') || q.includes('code') || q.includes('program')) {
+      type = 'coding';
+    } else if (q.includes('phone') || q.includes('computer') || q.includes('router') || q.includes('device')) {
+      type = 'tech';
+    } else if (q.includes('car') || q.includes('engine') || q.includes('brake') || q.includes('oil')) {
+      type = 'automotive';
+      safetyLevel = 'high';
+    } else if (q.includes('electrical') || q.includes('fuse') || q.includes('outlet') || q.includes('wiring')) {
+      type = 'repair';
+      safetyLevel = 'high';
+    } else if (q.includes('tv') || q.includes('home') || q.includes('kitchen') || q.includes('bathroom')) {
+      type = 'household';
+    } else if (q.includes('art') || q.includes('design') || q.includes('music') || q.includes('video')) {
+      type = 'creative';
+    }
+    
+    // Generate project name
+    let name = taskDescription;
+    if (q.includes('build')) name = taskDescription.replace(/help me build|how to build/i, '').trim();
+    if (q.includes('create')) name = taskDescription.replace(/help me create|how to create/i, '').trim();
+    if (q.includes('make')) name = taskDescription.replace(/help me make|how to make/i, '').trim();
+    if (q.includes('setup')) name = taskDescription.replace(/help me setup|how to setup/i, '').trim();
+    if (q.includes('fix')) name = taskDescription.replace(/help me fix|how to fix/i, '').trim();
+    
+    // Clean up and capitalize
+    name = name.replace(/^(a |an |the )/i, '').trim();
+    name = name.charAt(0).toUpperCase() + name.slice(1);
+    if (name.length < 3) name = taskDescription; // Fallback
+    
+    return { name, type, safetyLevel };
+  }
+
+  /**
+   * STEP TRACKING: Build context from previous steps for AI prompt
+   */
+  private buildStepContext(userId: string, projectId?: string): string {
+    const userSteps = this.userSteps.get(userId) || [];
+    
+    let relevantSteps: StepEntry[];
+    if (projectId) {
+      // Get steps from specific project
+      relevantSteps = userSteps.filter(step => step.projectId === projectId);
+    } else {
+      // Get recent steps from active project
+      const activeProjectId = this.activeProjects.get(userId);
+      if (activeProjectId) {
+        relevantSteps = userSteps.filter(step => step.projectId === activeProjectId);
+      } else {
+        relevantSteps = userSteps.slice(-3); // Last 3 steps if no active project
+      }
+    }
+    
+    if (relevantSteps.length === 0) {
+      return "This is the first step of the project.";
+    }
+    
+    const recentSteps = relevantSteps
+      .slice(-3) // Last 3 steps for context
+      .map(step => `Step ${step.stepNumber}: ${step.action} → ${step.response}`)
+      .join('\n');
+      
+    return `Previous steps in this project:\n${recentSteps}\n\nContinue with next logical step.`;
+  }
+
+  /**
+   * CONVERSATION CONTEXT: Build comprehensive conversation history for AI context
+   */
+  private buildConversationContext(userId: string, excludeCurrentQuestion?: string): string {
+    const userConversations = this.conversations.get(userId) || [];
+    
+    if (userConversations.length === 0) {
+      return "This is the start of our conversation.";
+    }
+    
+    // Get last 5 conversations for context (excluding current if specified)
+    let relevantConversations = userConversations
+      .filter(conv => conv.status === 'completed')
+      .slice(0, 5); // Most recent 5
+    
+    if (excludeCurrentQuestion) {
+      relevantConversations = relevantConversations
+        .filter(conv => conv.question !== excludeCurrentQuestion);
+    }
+    
+    if (relevantConversations.length === 0) {
+      return "This is the start of our conversation.";
+    }
+    
+    const conversationHistory = relevantConversations
+      .reverse() // Oldest first for chronological order
+      .map(conv => {
+        const timeAgo = this.getTimeAgo(conv.timestamp);
+        return `[${timeAgo}] User: "${conv.question}" → AI: "${conv.response}"`;
+      })
+      .join('\n');
+      
+    return `Recent conversation history:\n${conversationHistory}\n\nUse this context to provide relevant, personalized responses.`;
+  }
+
+  /**
+   * CONVERSATION CONTEXT: Build combined context (conversation + steps)
+   */
+  private buildCombinedContext(userId: string, currentQuestion: string, isStepRelated: boolean): string {
+    const conversationContext = this.buildConversationContext(userId, currentQuestion);
+    
+    if (!isStepRelated) {
+      return conversationContext;
+    }
+    
+    const stepContext = this.buildStepContext(userId);
+    const activeProject = this.getActiveProject(userId);
+    
+    let combined = conversationContext + '\n\n';
+    
+    if (activeProject) {
+      combined += `CURRENT PROJECT: "${activeProject.name}" (${activeProject.taskType})\n`;
+      combined += `Safety level: ${activeProject.safetyLevel}\n`;
+      combined += `Progress: ${activeProject.completedSteps}/${activeProject.totalSteps} steps completed\n\n`;
+    }
+    
+    combined += stepContext;
+    
+    return combined;
+  }
+
+  /**
+   * UTILITY: Get human-readable time ago string
+   */
+  private getTimeAgo(timestamp: number): string {
+    const now = Date.now();
+    const diffMs = now - timestamp;
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return 'yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return 'over a week ago';
+  }
+
+  /**
+   * STEP TRACKING: Create or get existing project
+   */
+  private getOrCreateProject(userId: string, taskDescription: string): ProjectEntry {
+    const userProjects = this.userProjects.get(userId) || [];
+    const activeProjectId = this.activeProjects.get(userId);
+    
+    // Check if we should continue existing active project
+    if (activeProjectId) {
+      const activeProject = userProjects.find(p => p.id === activeProjectId);
+      if (activeProject && activeProject.isActive) {
+        // Update last activity
+        activeProject.lastUpdated = Date.now();
+        return activeProject;
+      }
+    }
+    
+    // Create new project
+    const projectInfo = this.extractProjectInfo(taskDescription);
+    const projectId = `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const newProject: ProjectEntry = {
+      id: projectId,
+      name: projectInfo.name,
+      userId: userId,
+      description: taskDescription,
+      taskType: projectInfo.type,
+      startedAt: Date.now(),
+      lastUpdated: Date.now(),
+      steps: [],
+      isActive: true,
+      tags: [projectInfo.type],
+      totalSteps: 0,
+      completedSteps: 0,
+      safetyLevel: projectInfo.safetyLevel
+    };
+    
+    // Deactivate other projects for this user
+    userProjects.forEach(p => p.isActive = false);
+    
+    // Add new project
+    userProjects.push(newProject);
+    this.userProjects.set(userId, userProjects);
+    this.activeProjects.set(userId, projectId);
+    this.stepCounters.set(projectId, 0);
+    
+    this.logger.info(`📋 Created new project for user ${userId}: "${newProject.name}" (${newProject.taskType})`);
+    
+    return newProject;
+  }
+
+  /**
+   * STEP TRACKING: Create and store a step entry
+   */
+  private createStepEntry(
+    userId: string, 
+    action: string, 
+    response: string, 
+    project: ProjectEntry,
+    conversationEntry: ConversationEntry
+  ): StepEntry {
+    const projectId = project.id;
+    const currentStepCount = this.stepCounters.get(projectId) || 0;
+    const stepNumber = currentStepCount + 1;
+    
+    const stepEntry: StepEntry = {
+      id: `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      stepNumber: stepNumber,
+      timestamp: Date.now(),
+      userId: userId,
+      action: action,
+      response: response,
+      context: this.buildStepContext(userId, projectId),
+      isCompleted: false, // Will be marked completed when user continues
+      projectId: projectId,
+      projectName: project.name,
+      hasPhoto: conversationEntry.hasPhoto,
+      photoData: conversationEntry.photoData,
+      processingTime: conversationEntry.processingTime,
+      status: conversationEntry.status as any
+    };
+    
+    // Update step counter
+    this.stepCounters.set(projectId, stepNumber);
+    
+    // Add to user steps
+    const userSteps = this.userSteps.get(userId) || [];
+    userSteps.push(stepEntry);
+    this.userSteps.set(userId, userSteps);
+    
+    // Add to project steps
+    project.steps.push(stepEntry);
+    project.totalSteps = stepNumber;
+    project.lastUpdated = Date.now();
+    
+    // Mark previous step as completed if this is a continuation
+    if (stepNumber > 1) {
+      const previousStep = userSteps.find(s => s.projectId === projectId && s.stepNumber === stepNumber - 1);
+      if (previousStep) {
+        previousStep.isCompleted = true;
+        project.completedSteps = stepNumber - 1;
+      }
+    }
+    
+    // Link conversation to step
+    conversationEntry.stepNumber = stepNumber;
+    conversationEntry.projectId = projectId;
+    conversationEntry.isStepEntry = true;
+    
+    this.logger.info(`📝 Created step ${stepNumber} for project "${project.name}" (user: ${userId})`);
+    
+    return stepEntry;
   }
 
   /**
@@ -1705,8 +2535,199 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
       this.listeningStates.set(userId, {
         isListening: false,
         timestamp: 0,
-        session: currentState.session
+        session: currentState.session,
+        lastVoiceActivity: Date.now(),
+        silenceStartTime: 0,
+        hasSpokenSinceWakeWord: false
       });
+    }
+  }
+
+  /**
+   * STEP TRACKING: Get active project for user
+   */
+  private getActiveProject(userId: string): ProjectEntry | null {
+    const activeProjectId = this.activeProjects.get(userId);
+    if (!activeProjectId) return null;
+    
+    const userProjects = this.userProjects.get(userId) || [];
+    return userProjects.find(p => p.id === activeProjectId) || null;
+  }
+
+  /**
+   * ENHANCED: Safe vision processing with conversation context and cancellation
+   */
+  private async safeVisionProcessing(question: string, photo: PhotoData, userId?: string, signal?: AbortSignal): Promise<string> {
+    const maxRetries = 2;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Check if cancelled
+        if (signal?.aborted) {
+          throw new Error('Operation cancelled');
+        }
+
+        this.logger.info(`🤖 Vision processing attempt ${attempt}/${maxRetries}`);
+        
+        const model = this.gemini.getGenerativeModel({ 
+          model: "gemini-2.5-flash-lite-preview-06-17",
+          generationConfig: {
+            maxOutputTokens: 150,
+            temperature: 0.7
+          }
+        });
+
+        // Check image size first
+        let imageData = photo.buffer.toString('base64');
+        if (imageData.length > 1000000) {
+          this.logger.info(`🖼️ Large image detected, using text-only response`);
+          return await this.safeTextOnlyProcessing(question, userId, signal);
+        }
+
+        let prompt: string;
+        
+        if (userId) {
+          // Include conversation context for personalized response
+          const conversationContext = this.buildConversationContext(userId, question);
+          prompt = `You are a smart glasses AI assistant. User asked: "${question}" about this image.
+
+${conversationContext}
+
+Give a helpful 1-2 sentence response for text-to-speech. Use conversation history to provide relevant, personalized responses.`;
+        } else {
+          // Fallback for when userId is not available
+          prompt = `Smart glasses user asked: "${question}" about this image. 
+Give a helpful 1-2 sentence response for text-to-speech.`;
+        }
+
+        const result = await Promise.race([
+          model.generateContent([
+            prompt,
+            { inlineData: { data: imageData, mimeType: photo.mimeType } }
+          ]),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`Vision timeout attempt ${attempt}`)), 8000)
+          ),
+          // Add cancellation support
+          signal ? new Promise((_, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('Operation cancelled')));
+          }) : new Promise(() => {}) // No-op promise if no signal
+        ]) as any;
+
+        const response = await result.response;
+        const text = response.text();
+        
+        if (text && text.trim().length > 0) {
+          return text;
+        }
+        
+        throw new Error('Empty response from Gemini Vision');
+        
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        if (errorMessage === 'Operation cancelled') {
+          throw error;
+        }
+        
+        this.logger.warn(`🤖 Vision processing attempt ${attempt} failed: ${errorMessage}`);
+        
+        if (attempt === maxRetries) {
+          return await this.safeTextOnlyProcessing(question, userId, signal);
+        }
+        
+        // Brief delay before retry
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    return await this.safeTextOnlyProcessing(question, userId, signal);
+  }
+
+  /**
+   * ENHANCED: TTS with proper cancellation to prevent overlapping speech
+   */
+  private async speakResponseWithCancellation(session: AppSession, response: string, userId: string): Promise<void> {
+    // Cancel any existing TTS for this user
+    const existingTTSController = this.activeTTSOperations.get(userId);
+    if (existingTTSController) {
+      this.logger.info(`🗣️ Cancelling existing TTS for user ${userId}`);
+      existingTTSController.abort();
+    }
+
+    // Create new abort controller for this TTS operation
+    const controller = new AbortController();
+    this.activeTTSOperations.set(userId, controller);
+
+    const maxRetries = 2;
+    
+    try {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          // Check if cancelled
+          if (controller.signal.aborted) {
+            this.logger.info(`🗣️ TTS cancelled for user ${userId}`);
+            return;
+          }
+
+          this.logger.info(`🗣️ TTS attempt ${attempt}/${maxRetries} for user ${userId}: "${response}"`);
+          
+          // Try TTS with timeout and cancellation
+          const result = await Promise.race([
+            session.audio.speak(response),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error(`TTS timeout attempt ${attempt}`)), 10000)
+            ),
+            // Add cancellation support
+            new Promise((_, reject) => {
+              controller.signal.addEventListener('abort', () => reject(new Error('TTS cancelled')));
+            })
+          ]) as any;
+          
+          if (controller.signal.aborted) {
+            this.logger.info(`🗣️ TTS cancelled during execution for user ${userId}`);
+            return;
+          }
+          
+          if (result.success) {
+            this.logger.info(`✅ TTS successful for user ${userId} on attempt ${attempt}`);
+            // Show text as backup (non-blocking)
+            this.showFeedbackAsync(session, `AI: ${response}`, 4000);
+            return;
+          } else {
+            throw new Error(result.error || 'TTS failed');
+          }
+          
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          
+          if (errorMessage === 'TTS cancelled') {
+            this.logger.info(`🗣️ TTS cancelled for user ${userId}`);
+            return;
+          }
+          
+          this.logger.warn(`🗣️ TTS attempt ${attempt} failed for user ${userId}: ${errorMessage}`);
+          
+          if (attempt === maxRetries) {
+            this.logger.info(`🗣️ All TTS attempts failed for user ${userId}, showing text only`);
+            // Final fallback to text only
+            this.showFeedbackAsync(session, `AI: ${response}`, 6000);
+            return;
+          }
+          
+          // Brief delay before retry, but check for cancellation
+          await new Promise(resolve => {
+            const timeout = setTimeout(resolve, 300);
+            controller.signal.addEventListener('abort', () => {
+              clearTimeout(timeout);
+              resolve(undefined);
+            });
+          });
+        }
+      }
+    } finally {
+      // Clean up controller
+      this.activeTTSOperations.delete(userId);
     }
   }
 }
