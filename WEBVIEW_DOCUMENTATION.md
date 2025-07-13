@@ -40,7 +40,7 @@ interface ConversationEntry {
 
 ### GET `/webview`
 - **Purpose**: Serves the React-based mobile UI
-- **Authentication**: Required (MentraOS)
+- **Authentication**: ~~Required (MentraOS)~~ **Currently disabled** (authentication check commented out in lines 129-143)
 - **Response**: HTML page with embedded React app
 
 ### GET `/api/conversations`
@@ -203,7 +203,8 @@ app.get('/api/events', (req, res) => {
 
 ## 🔒 Security Notes
 
-- All endpoints require MentraOS authentication
+- ~~All endpoints require MentraOS authentication~~ **Webview endpoint authentication is currently disabled for testing**
+- API endpoints (`/api/conversations`, `/api/photo/:id`) still require MentraOS authentication
 - Photo data is only accessible to the owning user
 - Conversation data is isolated by userId
 - No sensitive data is logged in browser console

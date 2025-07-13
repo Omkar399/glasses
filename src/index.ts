@@ -27,6 +27,12 @@ interface ConversationEntry {
   };
   processingTime: number;
   status: 'processing' | 'completed' | 'error';
+  location?: {
+    lat: number;
+    lng: number;
+    address?: string;
+  };
+  category?: string; // e.g., 'Technology', 'Personal', 'Work'
 }
 
 /**
@@ -47,6 +53,7 @@ class HeyMentraVoiceAssistant extends AppServer {
   // WEBVIEW DATA STORAGE
   private conversations: Map<string, ConversationEntry[]> = new Map(); // Store conversations by userId
   private activeUsers: Map<string, { lastActivity: number; sessionId: string }> = new Map(); // Track active users
+  private sseClients: Map<string, any> = new Map(); // Store SSE response objects for real-time updates
 
   constructor() {
     super({
@@ -126,25 +133,51 @@ class HeyMentraVoiceAssistant extends AppServer {
     app.get('/webview', async (req: any, res: any) => {
       const userId = (req as AuthenticatedRequest).authUserId;
 
-      if (!userId) {
-        res.status(401).send(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>Hey Mentra - Not Authenticated</title>
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            </head>
-            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #1a1a1a; color: white;">
-              <h1>🔒 Please open this page from the MentraOS app</h1>
-            </body>
-          </html>
-        `);
-        return;
-      }
+      // if (!userId) {
+      //   res.status(401).send(`
+      //     <!DOCTYPE html>
+      //     <html>
+      //       <head>
+      //         <title>Hey Mentra - Not Authenticated</title>
+      //         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      //       </head>
+      //       <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #1a1a1a; color: white;">
+      //         <h1>🔒 Please open this page from the MentraOS app</h1>
+      //       </body>
+      //     </html>
+      //   `);
+      //   return;
+      // }
 
       // Serve the React-based mobile UI
       const html = this.generateReactWebviewHTML();
       res.send(html);
+    });
+
+    // SSE endpoint for real-time updates
+    app.get('/api/events', (req: any, res: any) => {
+      const userId = (req as AuthenticatedRequest).authUserId || 'anonymous';
+      
+      // Set SSE headers
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*'
+      });
+      
+      // Store client connection
+      this.sseClients.set(userId, res);
+      this.logger.info(`📡 SSE client connected for user ${userId}`);
+      
+      // Send initial connection event
+      res.write(`data: ${JSON.stringify({ type: 'connected', userId })}\n\n`);
+      
+      // Handle client disconnect
+      req.on('close', () => {
+        this.sseClients.delete(userId);
+        this.logger.info(`📡 SSE client disconnected for user ${userId}`);
+      });
     });
   }
 
@@ -162,6 +195,8 @@ class HeyMentraVoiceAssistant extends AppServer {
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         * {
             margin: 0;
@@ -171,141 +206,304 @@ class HeyMentraVoiceAssistant extends AppServer {
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #0a0a0a;
             min-height: 100vh;
-            color: white;
+            color: #ffffff;
             overflow-x: hidden;
         }
         
         .container {
             max-width: 100%;
-            padding: 20px;
             min-height: 100vh;
-        }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding: 20px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            backdrop-filter: blur(10px);
-        }
-        
-        .logo {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin-bottom: 10px;
-            background: linear-gradient(45deg, #fff, #f0f0f0);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        
-        .status {
-            display: flex;
-            justify-content: space-between;
-            margin: 20px 0;
-            gap: 10px;
-        }
-        
-        .status-card {
-            flex: 1;
-            padding: 15px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
-            text-align: center;
-            backdrop-filter: blur(10px);
-        }
-        
-        .conversation-list {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            padding-bottom: 80px; /* Space for bottom nav */
         }
         
-        .conversation-item {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
+        /* Header with device status */
+        .header {
+            background: #1a1a1a;
             padding: 20px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        
+        .device-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+            color: #888;
+        }
+        
+        .device-status.connected {
+            color: #4CAF50;
+        }
+        
+        .settings-btn {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        
+        /* Tab content area */
+        .tab-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        /* Bottom navigation */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #1a1a1a;
+            border-top: 1px solid #2a2a2a;
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+            z-index: 1000;
+        }
+        
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            padding: 10px;
+            border: none;
+            background: none;
+            color: #666;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+        
+        .nav-item.active {
+            color: #ffffff;
+        }
+        
+        .nav-icon {
+            font-size: 1.5rem;
+        }
+        
+        /* Card styles for conversations */
+        .card {
+            background: #1a1a1a;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 1px solid #2a2a2a;
             transition: all 0.3s ease;
         }
         
-        .conversation-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        .card:hover {
+            background: #222;
         }
         
-        .conversation-header {
+        .card-header {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
         
-        .timestamp {
-            font-size: 0.9rem;
-            opacity: 0.7;
-        }
-        
-        .status-badge {
-            padding: 5px 12px;
+        .category-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: #2a2a2a;
             border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: bold;
+            font-size: 0.85rem;
+            color: #888;
         }
         
-        .status-completed { background: #4CAF50; }
-        .status-processing { background: #FF9800; }
-        .status-error { background: #F44336; }
-        
-        .question {
-            font-weight: bold;
-            margin-bottom: 10px;
-            color: #FFE082;
+        .category-icon {
+            font-size: 1rem;
         }
         
-        .response {
-            line-height: 1.6;
-            margin-bottom: 15px;
+        .time-badge {
+            font-size: 0.85rem;
+            color: #666;
         }
         
-        .photo-container {
-            margin-top: 15px;
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #fff;
         }
         
-        .photo {
-            width: 100%;
-            max-width: 300px;
-            border-radius: 15px;
+        .card-description {
+            font-size: 0.95rem;
+            color: #888;
+            line-height: 1.5;
+        }
+        
+        /* Recording status */
+        .recording-status {
+            background: #1a1a1a;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #2a2a2a;
+        }
+        
+        .recording-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
             cursor: pointer;
-            transition: transform 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         
-        .photo:hover {
-            transform: scale(1.05);
+        .listening-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #888;
         }
         
-        .processing-time {
-            font-size: 0.8rem;
-            opacity: 0.7;
-            text-align: right;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 40px;
-        }
-        
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top: 4px solid white;
+        .listening-dot {
+            width: 8px;
+            height: 8px;
+            background: #dc3545;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        /* Search bar */
+        .search-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .search-bar {
+            flex: 1;
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: white;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .search-bar input {
+            flex: 1;
+            background: none;
+            border: none;
+            outline: none;
+            color: white;
+            font-size: 1rem;
+        }
+        
+        .search-bar input::placeholder {
+            color: #666;
+        }
+        
+        .filter-btn {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            padding: 12px;
+            color: #888;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+        
+        /* Date headers */
+        .date-header {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin: 20px 0 10px;
+            color: #fff;
+        }
+        
+        /* Map container */
+        #map {
+            height: calc(100vh - 200px);
+            width: 100%;
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        
+        /* Stats grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            border: 1px solid #2a2a2a;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #fff;
+        }
+        
+        .stat-label {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 4px;
+        }
+        
+        .live-transcript {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+            border: 1px solid #2a2a2a;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .transcript-text {
+            flex: 1;
+            color: #fff;
+            font-size: 1rem;
+        }
+        
+        .pulse {
+            display: inline-block;
+            animation: pulse 1s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         
         @keyframes spin {
@@ -313,36 +511,37 @@ class HeyMentraVoiceAssistant extends AppServer {
             100% { transform: rotate(360deg); }
         }
         
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #2a2a2a;
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
         .empty-state {
             text-align: center;
             padding: 60px 20px;
-            opacity: 0.7;
+            color: #666;
         }
         
-        .refresh-btn {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
-            border: none;
-            color: white;
-            font-size: 1.5rem;
-            cursor: pointer;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-            transition: all 0.3s ease;
-        }
-        
-        .refresh-btn:hover {
-            transform: scale(1.1);
+        .empty-state h3 {
+            color: #888;
+            margin-bottom: 10px;
         }
         
         @media (max-width: 768px) {
-            .container { padding: 15px; }
-            .status { flex-direction: column; }
-            .logo { font-size: 2rem; }
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -356,6 +555,10 @@ class HeyMentraVoiceAssistant extends AppServer {
             const [conversations, setConversations] = useState([]);
             const [loading, setLoading] = useState(true);
             const [stats, setStats] = useState({ activeUsers: 0, lastActivity: 0 });
+            const [connected, setConnected] = useState(false);
+            const [liveTranscript, setLiveTranscript] = useState('');
+            const [activeTab, setActiveTab] = useState('home');
+            const [searchQuery, setSearchQuery] = useState('');
 
             const fetchData = async () => {
                 try {
@@ -375,16 +578,246 @@ class HeyMentraVoiceAssistant extends AppServer {
 
             useEffect(() => {
                 fetchData();
-                const interval = setInterval(fetchData, 3000); // Auto-refresh every 3 seconds
-                return () => clearInterval(interval);
+                
+                const eventSource = new EventSource('/api/events');
+                
+                eventSource.onopen = () => {
+                    setConnected(true);
+                };
+                
+                eventSource.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'transcription') {
+                        setLiveTranscript(data.text);
+                        if (data.isFinal) {
+                            setTimeout(() => setLiveTranscript(''), 2000);
+                        }
+                    } else if (data.type === 'conversation-started' || 
+                        data.type === 'conversation-completed' || 
+                        data.type === 'conversation-error') {
+                        setConversations(prev => {
+                            const updated = [...prev];
+                            const index = updated.findIndex(c => c.id === data.conversation.id);
+                            if (index >= 0) {
+                                updated[index] = data.conversation;
+                            } else {
+                                updated.unshift(data.conversation);
+                            }
+                            return updated;
+                        });
+                        
+                        setStats(prev => ({
+                            ...prev,
+                            lastActivity: Date.now()
+                        }));
+                    }
+                };
+                
+                eventSource.onerror = () => {
+                    setConnected(false);
+                };
+                
+                return () => {
+                    eventSource.close();
+                };
             }, []);
 
             const formatTime = (timestamp) => {
-                return new Date(timestamp).toLocaleTimeString();
+                return new Date(timestamp).toLocaleString();
             };
 
             const formatDuration = (ms) => {
                 return \`\${(ms / 1000).toFixed(1)}s\`;
+            };
+
+            const groupConversationsByDate = (convs) => {
+                const groups = {};
+                convs.forEach(conv => {
+                    const date = new Date(conv.timestamp).toDateString();
+                    if (!groups[date]) groups[date] = [];
+                    groups[date].push(conv);
+                });
+                return groups;
+            };
+
+            const filteredConversations = conversations.filter(conv => 
+                conv.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                conv.response.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+
+            const renderHomeTab = () => (
+                <div>
+                    <div className="recording-status">
+                        <div>
+                            <button className="recording-btn">
+                                <span>🔴</span> Stop Recording
+                            </button>
+                            <div style={{marginTop: '8px', fontSize: '0.9rem', color: '#888'}}>
+                                Speaker 0: Hey Mentra
+                            </div>
+                        </div>
+                        <div className="listening-indicator">
+                            <span>Listening</span>
+                            <div className="listening-dot"></div>
+                        </div>
+                    </div>
+
+                    {liveTranscript && (
+                        <div className="live-transcript">
+                            <span className="pulse">🎤</span>
+                            <span className="transcript-text">{liveTranscript}</span>
+                        </div>
+                    )}
+
+                    <div className="stats-grid">
+                        <div className="stat-card">
+                            <div className="stat-value">{conversations.length}</div>
+                            <div className="stat-label">Total Conversations</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-value">{stats.activeUsers}</div>
+                            <div className="stat-label">Active Users</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-value">{conversations.filter(c => c.hasPhoto).length}</div>
+                            <div className="stat-label">Photos Captured</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-value">{connected ? 'Live' : 'Offline'}</div>
+                            <div className="stat-label">Status</div>
+                        </div>
+                    </div>
+
+                    <h3 className="date-header">Recent Activity</h3>
+                    {conversations.slice(0, 3).map(conv => (
+                        <div key={conv.id} className="card">
+                            <div className="card-header">
+                                <div className="category-badge">
+                                    <span className="category-icon">{conv.category === 'Technology' ? '💻' : conv.category === 'Personal' ? '👤' : '🔍'}</span>
+                                    {conv.category || 'General'}
+                                </div>
+                                <span className="time-badge">{formatTime(conv.timestamp)}</span>
+                            </div>
+                            <div className="card-title">{conv.question}</div>
+                            <div className="card-description">{conv.response.substring(0, 100)}...</div>
+                        </div>
+                    ))}
+                </div>
+            );
+
+            const renderChatTab = () => (
+                <div>
+                    <div className="search-container">
+                        <div className="search-bar">
+                            <span>🔍</span>
+                            <input 
+                                type="text" 
+                                placeholder="Search conversations..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
+                        <button className="filter-btn">📊</button>
+                    </div>
+
+                    {searchQuery ? (
+                        <div>
+                            <h3 className="date-header">Search Results ({filteredConversations.length})</h3>
+                            {filteredConversations.map(conv => (
+                                <div key={conv.id} className="card">
+                                    <div className="card-header">
+                                        <div className="category-badge">
+                                            <span className="category-icon">{conv.category === 'Technology' ? '💻' : conv.category === 'Personal' ? '👤' : '🔍'}</span>
+                                            {conv.category || 'General'}
+                                        </div>
+                                        <span className="time-badge">{formatTime(conv.timestamp)}</span>
+                                    </div>
+                                    <div className="card-title">{conv.question}</div>
+                                    <div className="card-description">{conv.response}</div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="empty-state">
+                            <h3>🔍 Search your conversations</h3>
+                            <p>Try asking: "Where did I leave my keys?"</p>
+                            <p>Or search for topics like "work" or "food"</p>
+                        </div>
+                    )}
+                </div>
+            );
+
+            const renderMemoriesTab = () => {
+                const groupedConversations = groupConversationsByDate(conversations);
+                return (
+                    <div>
+                        {Object.entries(groupedConversations).map(([date, convs]) => (
+                            <div key={date}>
+                                <h3 className="date-header">{date}</h3>
+                                {convs.map(conv => (
+                                    <div key={conv.id} className="card">
+                                        <div className="card-header">
+                                            <div className="category-badge">
+                                                <span className="category-icon">{conv.category === 'Technology' ? '💻' : conv.category === 'Personal' ? '👤' : '🔍'}</span>
+                                                {conv.category || 'General'}
+                                            </div>
+                                            <span className="time-badge">{formatTime(conv.timestamp)}</span>
+                                        </div>
+                                        <div className="card-title">{conv.question}</div>
+                                        <div className="card-description">{conv.response}</div>
+                                        {conv.hasPhoto && (
+                                            <img 
+                                                src={\`/api/photo/\${conv.id}\`}
+                                                alt="Memory"
+                                                style={{width: '100%', marginTop: '12px', borderRadius: '8px'}}
+                                                onClick={() => window.open(\`/api/photo/\${conv.id}\`, '_blank')}
+                                            />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        ))}
+                        {conversations.length === 0 && (
+                            <div className="empty-state">
+                                <h3>📸 No memories yet</h3>
+                                <p>Start conversations to build your memory timeline</p>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            const renderMapsTab = () => {
+                useEffect(() => {
+                    if (activeTab === 'maps' && window.L) {
+                        setTimeout(() => {
+                            const mapElement = document.getElementById('map');
+                            if (mapElement && !mapElement._leaflet_id) {
+                                const map = L.map('map').setView([37.7749, -122.4194], 13);
+                                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                                
+                                conversations.forEach(conv => {
+                                    if (conv.location) {
+                                        const marker = L.marker([conv.location.lat, conv.location.lng]).addTo(map);
+                                        marker.bindPopup(\`
+                                            <strong>\${conv.question}</strong><br>
+                                            \${conv.response.substring(0, 100)}...<br>
+                                            <small>\${formatTime(conv.timestamp)}</small>
+                                        \`);
+                                    }
+                                });
+                            }
+                        }, 100);
+                    }
+                }, [activeTab]);
+
+                return (
+                    <div>
+                        <h3 className="date-header">Conversation Locations</h3>
+                        <div id="map"></div>
+                    </div>
+                );
             };
 
             if (loading) {
@@ -392,7 +825,7 @@ class HeyMentraVoiceAssistant extends AppServer {
                     <div className="container">
                         <div className="loading">
                             <div className="spinner"></div>
-                            <p>Loading conversations...</p>
+                            <p>Loading...</p>
                         </div>
                     </div>
                 );
@@ -401,74 +834,50 @@ class HeyMentraVoiceAssistant extends AppServer {
             return (
                 <div className="container">
                     <div className="header">
-                        <div className="logo">👓 Hey Mentra</div>
-                        <p>Voice Assistant Dashboard</p>
+                        <div className="device-status" className={connected ? 'connected' : ''}>
+                            <span>⚙️</span>
+                            <span>{connected ? 'Mentra Connected' : 'No device found'}</span>
+                        </div>
+                        <button className="settings-btn">⚙️</button>
                     </div>
 
-                    <div className="status">
-                        <div className="status-card">
-                            <div style={{fontSize: '1.5rem', fontWeight: 'bold'}}>{conversations.length}</div>
-                            <div>Conversations</div>
-                        </div>
-                        <div className="status-card">
-                            <div style={{fontSize: '1.5rem', fontWeight: 'bold'}}>{stats.activeUsers}</div>
-                            <div>Active Users</div>
-                        </div>
-                        <div className="status-card">
-                            <div style={{fontSize: '1.5rem', fontWeight: 'bold'}}>
-                                {stats.lastActivity ? formatTime(stats.lastActivity) : '--'}
-                            </div>
-                            <div>Last Activity</div>
-                        </div>
+                    <div className="tab-content">
+                        {activeTab === 'home' && renderHomeTab()}
+                        {activeTab === 'chat' && renderChatTab()}
+                        {activeTab === 'memories' && renderMemoriesTab()}
+                        {activeTab === 'maps' && renderMapsTab()}
                     </div>
 
-                    <div className="conversation-list">
-                        {conversations.length === 0 ? (
-                            <div className="empty-state">
-                                <h3>🎙️ No conversations yet</h3>
-                                <p>Start talking to your Mentra glasses!</p>
-                                <p>Say "Hey Mentra" + your question</p>
-                            </div>
-                        ) : (
-                            conversations.map(conv => (
-                                <div key={conv.id} className="conversation-item">
-                                    <div className="conversation-header">
-                                        <span className="timestamp">{formatTime(conv.timestamp)}</span>
-                                        <span className={\`status-badge status-\${conv.status}\`}>
-                                            {conv.status}
-                                        </span>
-                                    </div>
-                                    
-                                    <div className="question">
-                                        🎤 "{conv.question}"
-                                    </div>
-                                    
-                                    <div className="response">
-                                        🤖 {conv.response}
-                                    </div>
-                                    
-                                    {conv.hasPhoto && (
-                                        <div className="photo-container">
-                                            <img 
-                                                src={\`/api/photo/\${conv.id}\`}
-                                                alt="Captured moment"
-                                                className="photo"
-                                                onClick={() => window.open(\`/api/photo/\${conv.id}\`, '_blank')}
-                                            />
-                                        </div>
-                                    )}
-                                    
-                                    <div className="processing-time">
-                                        ⚡ Processed in {formatDuration(conv.processingTime)}
-                                    </div>
-                                </div>
-                            ))
-                        )}
+                    <div className="bottom-nav">
+                        <button 
+                            className={\`nav-item \${activeTab === 'home' ? 'active' : ''}\`}
+                            onClick={() => setActiveTab('home')}
+                        >
+                            <div className="nav-icon">🏠</div>
+                            <div>Home</div>
+                        </button>
+                        <button 
+                            className={\`nav-item \${activeTab === 'chat' ? 'active' : ''}\`}
+                            onClick={() => setActiveTab('chat')}
+                        >
+                            <div className="nav-icon">💬</div>
+                            <div>Chat</div>
+                        </button>
+                        <button 
+                            className={\`nav-item \${activeTab === 'memories' ? 'active' : ''}\`}
+                            onClick={() => setActiveTab('memories')}
+                        >
+                            <div className="nav-icon">🖼️</div>
+                            <div>Memories</div>
+                        </button>
+                        <button 
+                            className={\`nav-item \${activeTab === 'maps' ? 'active' : ''}\`}
+                            onClick={() => setActiveTab('maps')}
+                        >
+                            <div className="nav-icon">🗺️</div>
+                            <div>Maps</div>
+                        </button>
                     </div>
-
-                    <button className="refresh-btn" onClick={fetchData} title="Refresh">
-                        🔄
-                    </button>
                 </div>
             );
         }
@@ -533,6 +942,16 @@ class HeyMentraVoiceAssistant extends AppServer {
       session.events.onTranscription((data) => {
         try {
           this.logger.debug(`🎤 Transcription received for user ${userId}: isFinal=${data.isFinal}, text="${data.text}"`);
+          
+          // Broadcast all transcriptions (both partial and final) for real-time display
+          if (data.text && data.text.trim()) {
+            this.broadcastSSE(userId, {
+              type: 'transcription',
+              text: data.text,
+              isFinal: data.isFinal,
+              timestamp: Date.now()
+            });
+          }
           
           if (!data.isFinal) return;
 
@@ -614,7 +1033,14 @@ class HeyMentraVoiceAssistant extends AppServer {
       response: '',
       hasPhoto: false,
       processingTime: 0,
-      status: 'processing'
+      status: 'processing',
+      // Add mock location data (in real app, this would come from device GPS)
+      location: {
+        lat: 37.7749 + (Math.random() - 0.5) * 0.1, // San Francisco area
+        lng: -122.4194 + (Math.random() - 0.5) * 0.1,
+        address: 'San Francisco, CA'
+      },
+      category: this.categorizeQuestion(request.question)
     };
     
     // Add to user's conversation list
@@ -626,6 +1052,12 @@ class HeyMentraVoiceAssistant extends AppServer {
     if (userConversations.length > 50) {
       userConversations.splice(50);
     }
+    
+    // Broadcast conversation started event
+    this.broadcastSSE(request.userId, {
+      type: 'conversation-started',
+      conversation: conversationEntry
+    });
     
     try {
       // Show immediate feedback (non-blocking)
@@ -642,6 +1074,12 @@ class HeyMentraVoiceAssistant extends AppServer {
       conversationEntry.processingTime = Date.now() - startTime;
       conversationEntry.status = 'completed';
       
+      // Broadcast conversation completed event
+      this.broadcastSSE(request.userId, {
+        type: 'conversation-completed',
+        conversation: conversationEntry
+      });
+      
       // ENHANCED TTS with retry mechanism
       await this.speakResponseWithRetry(request.session, finalResponse);
       
@@ -652,6 +1090,12 @@ class HeyMentraVoiceAssistant extends AppServer {
       conversationEntry.response = "Sorry, I encountered an error. Please try again.";
       conversationEntry.processingTime = Date.now() - startTime;
       conversationEntry.status = 'error';
+      
+      // Broadcast conversation error event
+      this.broadcastSSE(request.userId, {
+        type: 'conversation-error',
+        conversation: conversationEntry
+      });
       
       // Async error response (non-blocking)
       setImmediate(async () => {
@@ -711,6 +1155,13 @@ class HeyMentraVoiceAssistant extends AppServer {
       this.lastPhotoTime.set(userId, Date.now());
       
       this.logger.info(`📸 Photo captured successfully for user ${userId}`);
+      
+      // Broadcast photo captured event
+      this.broadcastSSE(userId, {
+        type: 'photo-captured',
+        timestamp: Date.now()
+      });
+      
       return photo;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -935,11 +1386,43 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
   }
 
   /**
+   * Send SSE event to connected clients
+   */
+  private broadcastSSE(userId: string, data: any): void {
+    const client = this.sseClients.get(userId);
+    if (client) {
+      try {
+        client.write(`data: ${JSON.stringify(data)}\n\n`);
+      } catch (error) {
+        this.logger.warn(`Failed to send SSE to user ${userId}:`, error);
+        this.sseClients.delete(userId);
+      }
+    }
+  }
+
+  /**
    * OPTIMIZED: Faster wake word detection
    */
   private detectWakeWord(text: string): boolean {
     const wakeWords = ['hey mentra', 'hi mentra', 'hey mantra'];
     return wakeWords.some(word => text.includes(word));
+  }
+
+  /**
+   * Categorize question based on keywords
+   */
+  private categorizeQuestion(question: string): string {
+    const q = question.toLowerCase();
+    if (q.includes('code') || q.includes('programming') || q.includes('function') || q.includes('debug')) {
+      return 'Technology';
+    } else if (q.includes('keys') || q.includes('wallet') || q.includes('phone') || q.includes('where')) {
+      return 'Personal';
+    } else if (q.includes('meeting') || q.includes('work') || q.includes('email') || q.includes('deadline')) {
+      return 'Work';
+    } else if (q.includes('food') || q.includes('recipe') || q.includes('cook') || q.includes('eat')) {
+      return 'Food';
+    }
+    return 'General';
   }
 
   /**
