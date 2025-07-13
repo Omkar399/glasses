@@ -93,14 +93,27 @@ Copy the HTTPS URL (e.g., `https://abc123.ngrok.io`) and use it in your MentraOS
 ## How to Use
 
 1. **Launch the App**: Open the app in MentraOS on your smart glasses
-2. **Start Talking**: Say "Hey Mentra" followed by your question
-   - Example: "Hey Mentra, what am I looking at?"
-   - Example: "Hey Mentra, can you read this sign?"
-   - Example: "Hey Mentra, describe this scene"
-3. **Get AI Response**: The app will:
+2. **Wake the Assistant**: Say "Hey Mentra" 
+   - The assistant will respond: "I'm listening, how can I help?"
+3. **Ask Your Question**: After hearing the response, ask your question
+   - Example: "What am I looking at?"
+   - Example: "Can you read this sign?"
+   - Example: "Describe this scene"
+4. **Get AI Response**: The app will:
    - Take a photo automatically
    - Process your question and the image with Gemini AI
    - Respond with natural-sounding voice
+
+## Interaction Flow
+
+**Two-Stage Siri-like Experience:**
+
+1. **Wake Word**: "Hey Mentra" 
+   - **Assistant**: "I'm listening, how can I help?" 🎤
+2. **Your Question**: "What do you see?"
+   - **Assistant**: *[Takes photo and analyzes]* "I can see..."
+
+**Timeout**: You have 10 seconds to ask your question after the wake word. If no question is asked, the assistant will timeout and you'll need to say "Hey Mentra" again.
 
 ## Supported Wake Words
 
@@ -114,10 +127,14 @@ The app recognizes various pronunciations:
 
 ## Example Interactions
 
-**User**: "Hey Mentra, what's in front of me?"
+**User**: "Hey Mentra"
+**Assistant**: "I'm listening, how can I help?"
+**User**: "What's in front of me?"
 **Assistant**: *[Takes photo]* "I can see a busy street with several cars and a red traffic light. There appears to be a coffee shop on the left side."
 
-**User**: "Hey Mentra, read this menu"
+**User**: "Hey Mentra"  
+**Assistant**: "I'm listening, how can I help?"
+**User**: "Read this menu"
 **Assistant**: *[Takes photo]* "This appears to be a restaurant menu featuring Italian dishes. I can see pasta options like spaghetti carbonara and fettuccine alfredo, with prices ranging from $12 to $18."
 
 ## Technical Details
@@ -160,6 +177,25 @@ hey-mentra-voice-assistant/
 
 ## Troubleshooting
 
+### Connection Issues
+
+**"Connection timeout after 5000ms"**
+- This is a common WebSocket connection issue. The app now includes enhanced connection settings:
+  - Increased reconnection attempts (5 instead of 3)
+  - Longer reconnection delays (2000ms instead of 1000ms)
+  - Better error handling and recovery
+- **Solutions:**
+  1. **Check your internet connection** - Ensure stable connectivity
+  2. **Verify WebSocket URL** - Add `MENTRAOS_WEBSOCKET_URL=wss://prod.augmentos.cloud/app-ws` to your `.env` file
+  3. **Restart the app** - Sometimes a fresh start resolves connection issues
+  4. **Check firewall settings** - Ensure WebSocket connections are allowed
+  5. **Try local development** - Use `MENTRAOS_WEBSOCKET_URL=ws://localhost:8002/app-ws` for local testing
+
+**"WebSocket connection error"**
+- The app now includes automatic retry logic and connection monitoring
+- Check the logs for specific error messages
+- Ensure your MentraOS API key is valid and active
+
 ### Common Issues
 
 1. **"PACKAGE_NAME is not set"**
@@ -178,6 +214,32 @@ hey-mentra-voice-assistant/
 5. **Voice not responding**
    - Ensure ElevenLabs TTS is configured in your MentraOS environment
    - Check your internet connection
+
+### Enhanced Connection Configuration
+
+The app now includes several improvements for connection reliability:
+
+- **Automatic Reconnection**: Up to 5 attempts with exponential backoff
+- **Connection Monitoring**: Real-time WebSocket state tracking
+- **Error Recovery**: Automatic state cleanup on connection issues
+- **Retry Logic**: Enhanced retry mechanisms for all operations
+- **Timeout Management**: Optimized timeouts for better reliability
+
+### Environment Variables
+
+Add these to your `.env` file for enhanced configuration:
+
+```env
+PORT=3000
+PACKAGE_NAME=com.mentra.voice-assistant
+MENTRAOS_API_KEY=your_mentraos_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Optional: Override the default MentraOS WebSocket URL
+# Default: wss://prod.augmentos.cloud/app-ws
+# For local development: ws://localhost:8002/app-ws
+MENTRAOS_WEBSOCKET_URL=wss://prod.augmentos.cloud/app-ws
+```
 
 ### Debug Mode
 
