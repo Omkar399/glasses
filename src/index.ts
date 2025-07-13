@@ -1004,7 +1004,7 @@ Give a helpful 1-sentence response. Be conversational for text-to-speech.`;
         this.logger.info(`🤖 Vision processing attempt ${attempt}/${maxRetries}`);
         
         const model = this.gemini.getGenerativeModel({ 
-          model: "gemini-1.5-flash",
+          model: "gemini-2.5-flash-lite-preview-06-17",
           generationConfig: {
             maxOutputTokens: 150,
             temperature: 0.7
