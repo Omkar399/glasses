@@ -1640,7 +1640,25 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
    * OPTIMIZED: Faster wake word detection
    */
   private detectWakeWord(text: string): boolean {
-    const wakeWords = ['hey mentra', 'hi mentra', 'hey mantra'];
+    const wakeWords = [
+      // Core Variants
+      'hey mentra', 'heyy mentra', 'hey mentraaa', 'hey mentra buddy', 'hey there mentra',
+      'hey mentra please', 'hey mentra now',
+    
+      // Phonetic Variants / Common Mishearings
+      'he mentra', 'hementra', 'hamentra', 'hem entra', 'hai mentra', 'hay mentra',
+      'heymantra', 'hey mantra', 'hey mantraa', 'aye mentra', 'hi mentra',
+      'hemantra', 'huh mentra', 'hae mentra', 'hae mantra', 'hee mentra',
+    
+      // Likely ASR Misinterpretations
+      'hey mentor', 'hey mantra', 'hey manta', 'hey mental', 'a man try', 'hey mancha',
+      'hey mendra', 'a mentor', 'hey matra', 'hey mentee', 'hey mantraa',
+      'hey mendra', 'aye mantra',
+    
+      // Aggressive Slurring or Accentual Variants
+      "h'mentra", 'aymentra', 'aymenta', 'hemtra', 'hementa', 'ammentra',
+      'yamentra', 'h’mentra', 'aymentrah', 'haimen'
+    ];
     return wakeWords.some(word => text.includes(word));
   }
 
