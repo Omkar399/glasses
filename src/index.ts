@@ -396,6 +396,65 @@ class HeyMentraVoiceAssistant extends AppServer {
             color: #6c757d;
         }
         
+        .transcript-area {
+            margin-top: 8px;
+            min-height: 20px;
+        }
+        
+        .live-transcript-inline {
+            display: flex;
+            align-items: flex-start;
+            font-size: 0.9rem;
+            color: #212529;
+            line-height: 1.4;
+            word-wrap: break-word;
+            max-width: 100%;
+        }
+        
+        .live-transcript-inline span:last-child {
+            flex: 1;
+        }
+        
+        /* Speech History */
+        .speech-history {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .speech-item {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        
+        .speech-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .speech-number {
+            font-size: 0.8rem;
+            color: #007bff;
+            font-weight: 600;
+        }
+        
+        .speech-time {
+            font-size: 0.75rem;
+            color: #adb5bd;
+        }
+        
+        .speech-text {
+            font-size: 0.95rem;
+            color: #212529;
+            line-height: 1.4;
+            font-style: italic;
+        }
+        
         .listening-dot {
             width: 8px;
             height: 8px;
@@ -492,22 +551,6 @@ class HeyMentraVoiceAssistant extends AppServer {
             margin-top: 4px;
         }
         
-        .live-transcript {
-            background: #e7f3ff;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 20px;
-            border: 1px solid #bee5eb;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .transcript-text {
-            flex: 1;
-            color: #0c5460;
-            font-size: 1rem;
-        }
         
         .pulse {
             display: inline-block;
@@ -671,8 +714,17 @@ class HeyMentraVoiceAssistant extends AppServer {
                             <button className="recording-btn">
                                 <span>🔴</span> Stop Recording
                             </button>
-                            <div style={{marginTop: '8px', fontSize: '0.9rem', color: '#888'}}>
-                                Speaker 0: Hey Mentra
+                            <div className="transcript-area">
+                                {liveTranscript ? (
+                                    <div className="live-transcript-inline">
+                                        <span className="pulse" style={{marginRight: '8px'}}>🎤</span>
+                                        <span>{liveTranscript}</span>
+                                    </div>
+                                ) : (
+                                    <div style={{fontSize: '0.9rem', color: '#6c757d'}}>
+                                        Hey Mentra
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <div className="listening-indicator">
@@ -680,13 +732,6 @@ class HeyMentraVoiceAssistant extends AppServer {
                             <div className="listening-dot"></div>
                         </div>
                     </div>
-
-                    {liveTranscript && (
-                        <div className="live-transcript">
-                            <span className="pulse">🎤</span>
-                            <span className="transcript-text">{liveTranscript}</span>
-                        </div>
-                    )}
 
                     <div className="stats-grid">
                         <div className="stat-card">
@@ -707,20 +752,24 @@ class HeyMentraVoiceAssistant extends AppServer {
                         </div>
                     </div>
 
-                    <h3 className="date-header">Recent Activity</h3>
-                    {conversations.slice(0, 3).map(conv => (
-                        <div key={conv.id} className="card">
-                            <div className="card-header">
-                                <div className="category-badge">
-                                    <span className="category-icon">{conv.category === 'Technology' ? '💻' : conv.category === 'Personal' ? '👤' : '🔍'}</span>
-                                    {conv.category || 'General'}
-                                </div>
-                                <span className="time-badge">{formatTime(conv.timestamp)}</span>
+                    <h3 className="date-header">Speech History</h3>
+                    <div className="speech-history">
+                        {conversations.length === 0 ? (
+                            <div className="empty-state">
+                                <p>No speech recorded yet</p>
                             </div>
-                            <div className="card-title">{conv.question}</div>
-                            <div className="card-description">{conv.response.substring(0, 100)}...</div>
-                        </div>
-                    ))}
+                        ) : (
+                            conversations.map((conv, index) => (
+                                <div key={conv.id} className="speech-item">
+                                    <div className="speech-header">
+                                        <span className="speech-number">#{conversations.length - index}</span>
+                                        <span className="speech-time">{formatTime(conv.timestamp)}</span>
+                                    </div>
+                                    <div className="speech-text">"{conv.question}"</div>
+                                </div>
+                            ))
+                        )}
+                    </div>
                 </div>
             );
 
