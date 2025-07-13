@@ -45,8 +45,8 @@ interface ConversationEntry {
  */
 class HeyMentraVoiceAssistant extends AppServer {
   private gemini: GoogleGenerativeAI;
-  private isProcessingRequest = false;
-  private requestQueue: Array<{ question: string; session: AppSession; userId: string; timestamp: number }> = [];
+  private activeProcessingUsers: Set<string> = new Set(); // Track users currently processing requests
+  private processingStates: Map<string, boolean> = new Map(); // Per-user processing state
   private activePhotoRequests: Map<string, boolean> = new Map(); // Track active photo requests per user
   private lastPhotoTime: Map<string, number> = new Map(); // Track last photo time per user
   
@@ -62,6 +62,13 @@ class HeyMentraVoiceAssistant extends AppServer {
     session: AppSession; 
   }> = new Map(); // Track listening state per user
   private readonly LISTENING_TIMEOUT = 10000; // 10 seconds to ask question after wake word
+  
+  // MULTI-DEVICE RESOURCE MANAGEMENT
+  private readonly MAX_CONCURRENT_USERS = 50; // Maximum concurrent processing users (increased for more capacity)
+  
+  // BROADCAST MESSAGE MANAGEMENT
+  private lastBroadcastTime: Map<string, number> = new Map(); // Track last broadcast time per user
+  private readonly BROADCAST_COOLDOWN = 5000; // 5 seconds between broadcasts per user
 
   constructor() {
     super({
@@ -79,7 +86,8 @@ class HeyMentraVoiceAssistant extends AppServer {
     // Setup webview routes
     this.setupWebviewRoutes();
     
-    this.logger.info(`🚀 OPTIMIZED Hey Mentra Voice Assistant with ENHANCED CONNECTION SETTINGS initialized`);
+    this.logger.info(`🚀 OPTIMIZED Multi-Device Hey Mentra Voice Assistant initialized`);
+    this.logger.info(`📊 Multi-Device Config: ${this.MAX_CONCURRENT_USERS} max concurrent users, unlimited requests per user`);
   }
 
   /**
@@ -111,6 +119,8 @@ class HeyMentraVoiceAssistant extends AppServer {
       res.json({
         conversations: sanitizedConversations,
         activeUsers: Array.from(this.activeUsers.keys()).length,
+        processingUsers: this.activeProcessingUsers.size,
+        maxConcurrentUsers: this.MAX_CONCURRENT_USERS,
         lastActivity: this.activeUsers.get(userId)?.lastActivity || 0
       });
     });
@@ -615,7 +625,7 @@ class HeyMentraVoiceAssistant extends AppServer {
         function App() {
             const [conversations, setConversations] = useState([]);
             const [loading, setLoading] = useState(true);
-            const [stats, setStats] = useState({ activeUsers: 0, lastActivity: 0 });
+            const [stats, setStats] = useState({ activeUsers: 0, processingUsers: 0, maxConcurrentUsers: 10, lastActivity: 0 });
             const [connected, setConnected] = useState(false);
             const [liveTranscript, setLiveTranscript] = useState('');
             const [activeTab, setActiveTab] = useState('home');
@@ -628,6 +638,8 @@ class HeyMentraVoiceAssistant extends AppServer {
                     setConversations(data.conversations || []);
                     setStats({ 
                         activeUsers: data.activeUsers || 0, 
+                        processingUsers: data.processingUsers || 0,
+                        maxConcurrentUsers: data.maxConcurrentUsers || 10,
                         lastActivity: data.lastActivity || 0 
                     });
                 } catch (error) {
@@ -741,6 +753,10 @@ class HeyMentraVoiceAssistant extends AppServer {
                         <div className="stat-card">
                             <div className="stat-value">{stats.activeUsers}</div>
                             <div className="stat-label">Active Users</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-value">{stats.processingUsers || 0}/{stats.maxConcurrentUsers || 10}</div>
+                            <div className="stat-label">Processing</div>
                         </div>
                         <div className="stat-card">
                             <div className="stat-value">{conversations.filter(c => c.hasPhoto).length}</div>
@@ -1073,7 +1089,47 @@ class HeyMentraVoiceAssistant extends AppServer {
               return;
             }
             
-            // Process the user's question
+            // Check for echo command first
+            const echoResult = this.detectEchoCommand(spokenText);
+            if (echoResult.isEcho && echoResult.message) {
+              this.logger.info(`📢 Echo command detected from user ${userId}: "${echoResult.message}"`);
+              this.resetListeningState(userId);
+              
+              // Update last activity for webview
+              this.activeUsers.set(userId, { lastActivity: Date.now(), sessionId });
+              
+              // Process broadcast command
+              setImmediate(async () => {
+                try {
+                  const deliveredCount = await this.broadcastToAllDevices(echoResult.message!, userId);
+                  
+                  // Respond to sender with confirmation
+                  const confirmationMessage = deliveredCount > 0 
+                    ? `Message sent to ${deliveredCount} device${deliveredCount === 1 ? '' : 's'}`
+                    : "No other devices are connected to broadcast to";
+                  
+                  await this.speakWithRetry(session, confirmationMessage, userId);
+                  this.showFeedbackAsync(session, `📢 ${confirmationMessage}`, 3000);
+                  
+                  // Send SSE notification for webview
+                  this.broadcastSSE(userId, {
+                    type: 'broadcast-sent',
+                    message: echoResult.message,
+                    recipients: deliveredCount,
+                    timestamp: Date.now()
+                  });
+                  
+                } catch (error) {
+                  this.logger.error(`❌ Failed to process broadcast from user ${userId}:`, error);
+                  const errorMessage = error instanceof Error ? error.message : "Sorry, broadcast failed. Please try again.";
+                  await this.speakWithRetry(session, errorMessage, userId);
+                  this.showFeedbackAsync(session, `❌ ${errorMessage}`, 3000);
+                }
+              });
+              return;
+            }
+            
+            // Process the user's question (normal flow)
             this.logger.info(`✨ Processing user question for ${userId}: "${spokenText}"`);
             this.resetListeningState(userId);
             
@@ -1089,8 +1145,45 @@ class HeyMentraVoiceAssistant extends AppServer {
               }
             });
           } else {
+            // Check for direct echo command (without wake word)
+            const echoResult = this.detectEchoCommand(spokenText);
+            if (echoResult.isEcho && echoResult.message) {
+              this.logger.info(`📢 Direct echo command detected from user ${userId}: "${echoResult.message}"`);
+              
+              // Update last activity for webview
+              this.activeUsers.set(userId, { lastActivity: Date.now(), sessionId });
+              
+              // Process broadcast command directly
+              setImmediate(async () => {
+                try {
+                  const deliveredCount = await this.broadcastToAllDevices(echoResult.message!, userId);
+                  
+                  // Respond to sender with confirmation
+                  const confirmationMessage = deliveredCount > 0 
+                    ? `Message sent to ${deliveredCount} device${deliveredCount === 1 ? '' : 's'}`
+                    : "No other devices are connected to broadcast to";
+                  
+                  await this.speakWithRetry(session, confirmationMessage, userId);
+                  this.showFeedbackAsync(session, `📢 ${confirmationMessage}`, 3000);
+                  
+                  // Send SSE notification for webview
+                  this.broadcastSSE(userId, {
+                    type: 'broadcast-sent',
+                    message: echoResult.message,
+                    recipients: deliveredCount,
+                    timestamp: Date.now()
+                  });
+                  
+                } catch (error) {
+                  this.logger.error(`❌ Failed to process direct broadcast from user ${userId}:`, error);
+                  const errorMessage = error instanceof Error ? error.message : "Sorry, broadcast failed. Please try again.";
+                  await this.speakWithRetry(session, errorMessage, userId);
+                  this.showFeedbackAsync(session, `❌ ${errorMessage}`, 3000);
+                }
+              });
+            }
             // Check for wake word detection
-            if (this.detectWakeWord(spokenText)) {
+            else if (this.detectWakeWord(spokenText)) {
               this.logger.info(`✨ Wake word detected for user ${userId}`);
               
               // Enter listening mode
@@ -1119,7 +1212,7 @@ class HeyMentraVoiceAssistant extends AppServer {
               }, this.LISTENING_TIMEOUT);
               
             } else {
-              this.logger.debug(`🔇 No wake word detected in: "${spokenText}"`);
+              this.logger.debug(`🔇 No wake word or echo command detected in: "${spokenText}"`);
             }
           }
         } catch (error) {
@@ -1228,6 +1321,10 @@ class HeyMentraVoiceAssistant extends AppServer {
     // Clean up user state
     this.activePhotoRequests.delete(userId);
     this.lastPhotoTime.delete(userId);
+    this.activeProcessingUsers.delete(userId);
+    this.processingStates.delete(userId);
+    this.lastBroadcastTime.delete(userId); // Clean up broadcast timing data
+    this.listeningStates.delete(userId); // Clean up listening state
     
     // WEBVIEW: Remove from active users but keep conversation history
     this.activeUsers.delete(userId);
@@ -1236,26 +1333,47 @@ class HeyMentraVoiceAssistant extends AppServer {
   }
 
   /**
-   * ENHANCED: Async queue-based request processing with WEBVIEW data storage
+   * ENHANCED: Direct async request processing with per-user concurrency control
    */
   private async processRequest(question: string, session: AppSession, userId: string): Promise<void> {
-    // Add to queue
-    this.requestQueue.push({ question, session, userId, timestamp: Date.now() });
+    // Check if user is already processing a request (rate limiting)
+    if (this.activeProcessingUsers.has(userId)) {
+      this.logger.warn(`⚠️ User ${userId} already has an active request, skipping new request`);
+      this.showFeedbackAsync(session, "Please wait for your current request to complete.", 3000);
+      return;
+    }
+
+    // Check global concurrent user limit
+    if (this.activeProcessingUsers.size >= this.MAX_CONCURRENT_USERS) {
+      this.logger.warn(`⚠️ Maximum concurrent users (${this.MAX_CONCURRENT_USERS}) reached, rejecting request from ${userId}`);
+      this.showFeedbackAsync(session, "System is busy, please try again in a moment.", 3000);
+      return;
+    }
+
+    // No rate limiting - users can make unlimited requests
+
+    // Mark user as processing
+    this.activeProcessingUsers.add(userId);
+    this.processingStates.set(userId, true);
     
-    // Process if not already processing (non-blocking)
-    if (!this.isProcessingRequest) {
-      await this.processQueueAsync();
+    this.logger.info(`🚀 Processing request for user ${userId} (${this.activeProcessingUsers.size}/${this.MAX_CONCURRENT_USERS} concurrent users)`);
+    
+    try {
+      // Process request directly (no queue)
+      await this.processUserRequest(question, session, userId);
+    } finally {
+      // Always clean up user processing state
+      this.activeProcessingUsers.delete(userId);
+      this.processingStates.set(userId, false);
+      this.logger.debug(`✅ Request completed for user ${userId} (${this.activeProcessingUsers.size}/${this.MAX_CONCURRENT_USERS} concurrent users)`);
     }
   }
 
+
   /**
-   * ENHANCED: Fully async queue processing with webview data storage
+   * ENHANCED: Per-user request processing with webview data storage
    */
-  private async processQueueAsync(): Promise<void> {
-    if (this.requestQueue.length === 0 || this.isProcessingRequest) return;
-    
-    this.isProcessingRequest = true;
-    const request = this.requestQueue.shift()!;
+  private async processUserRequest(question: string, session: AppSession, userId: string): Promise<void> {
     
     // WEBVIEW: Create conversation entry
     const conversationId = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -1264,8 +1382,8 @@ class HeyMentraVoiceAssistant extends AppServer {
     const conversationEntry: ConversationEntry = {
       id: conversationId,
       timestamp: startTime,
-      userId: request.userId,
-      question: request.question,
+      userId: userId,
+      question: question,
       response: '',
       hasPhoto: false,
       processingTime: 0,
@@ -1276,13 +1394,13 @@ class HeyMentraVoiceAssistant extends AppServer {
         lng: -122.4194 + (Math.random() - 0.5) * 0.1,
         address: 'San Francisco, CA'
       },
-      category: this.categorizeQuestion(request.question)
+      category: this.categorizeQuestion(question)
     };
     
     // Add to user's conversation list
-    const userConversations = this.conversations.get(request.userId) || [];
+    const userConversations = this.conversations.get(userId) || [];
     userConversations.unshift(conversationEntry); // Add to beginning for latest-first display
-    this.conversations.set(request.userId, userConversations);
+    this.conversations.set(userId, userConversations);
     
     // Keep only last 50 conversations per user to prevent memory issues
     if (userConversations.length > 50) {
@@ -1290,20 +1408,20 @@ class HeyMentraVoiceAssistant extends AppServer {
     }
     
     // Broadcast conversation started event
-    this.broadcastSSE(request.userId, {
+    this.broadcastSSE(userId, {
       type: 'conversation-started',
       conversation: conversationEntry
     });
     
     try {
       // Show immediate feedback (non-blocking)
-      this.showFeedbackAsync(request.session, "Processing...", 1000);
+      this.showFeedbackAsync(session, "Processing...", 1000);
       
       // ENHANCED PARALLEL PROCESSING with better promise handling
-      const parallelOperations = await this.executeParallelOperations(request, request.userId);
+      const parallelOperations = await this.executeParallelOperations(question, session, userId);
       
       // Process results with fallback chain
-      const finalResponse = await this.processResults(parallelOperations, request.question, conversationEntry);
+      const finalResponse = await this.processResults(parallelOperations, question, conversationEntry);
       
       // Update conversation entry with results
       conversationEntry.response = finalResponse;
@@ -1311,16 +1429,16 @@ class HeyMentraVoiceAssistant extends AppServer {
       conversationEntry.status = 'completed';
       
       // Broadcast conversation completed event
-      this.broadcastSSE(request.userId, {
+      this.broadcastSSE(userId, {
         type: 'conversation-completed',
         conversation: conversationEntry
       });
       
       // ENHANCED TTS with retry mechanism
-      await this.speakResponseWithRetry(request.session, finalResponse);
+      await this.speakResponseWithRetry(session, finalResponse);
       
     } catch (error) {
-      this.logger.error(`❌ Request failed:`, error);
+      this.logger.error(`❌ Request failed for user ${userId}:`, error);
       
       // Update conversation entry with error
       conversationEntry.response = "Sorry, I encountered an error. Please try again.";
@@ -1328,32 +1446,26 @@ class HeyMentraVoiceAssistant extends AppServer {
       conversationEntry.status = 'error';
       
       // Broadcast conversation error event
-      this.broadcastSSE(request.userId, {
+      this.broadcastSSE(userId, {
         type: 'conversation-error',
         conversation: conversationEntry
       });
       
       // Async error response (non-blocking)
       setImmediate(async () => {
-        await this.speakResponseWithRetry(request.session, "Sorry, please try again.");
+        await this.speakResponseWithRetry(session, "Sorry, please try again.");
       });
-    } finally {
-      this.isProcessingRequest = false;
-      
-      // Process next item in queue (non-blocking)
-      if (this.requestQueue.length > 0) {
-        setImmediate(() => this.processQueueAsync());
-      }
     }
+    // Note: User processing state cleanup is handled in processRequest's finally block
   }
 
   /**
    * ENHANCED: Execute parallel operations with better promise management
    */
-  private async executeParallelOperations(request: { question: string; session: AppSession; userId: string; timestamp: number }, userId: string) {
+  private async executeParallelOperations(question: string, session: AppSession, userId: string) {
     // Create promises that won't reject the entire Promise.allSettled
-    const photoPromise = this.safePhotoCapture(request.session, userId);
-    const textPromise = this.safeTextOnlyProcessing(request.question);
+    const photoPromise = this.safePhotoCapture(session, userId);
+    const textPromise = this.safeTextOnlyProcessing(question);
     
     // Execute in parallel with proper error isolation
     return await Promise.allSettled([photoPromise, textPromise]);
@@ -1637,6 +1749,101 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
   }
 
   /**
+   * Broadcast message to all connected devices except sender
+   */
+  private async broadcastToAllDevices(message: string, senderUserId: string): Promise<number> {
+    // Check broadcast rate limiting
+    const lastBroadcast = this.lastBroadcastTime.get(senderUserId) || 0;
+    const timeSinceLastBroadcast = Date.now() - lastBroadcast;
+    
+    if (timeSinceLastBroadcast < this.BROADCAST_COOLDOWN) {
+      const remainingCooldown = Math.ceil((this.BROADCAST_COOLDOWN - timeSinceLastBroadcast) / 1000);
+      this.logger.warn(`📢 Broadcast rate limited for user ${senderUserId}, ${remainingCooldown}s remaining`);
+      throw new Error(`Please wait ${remainingCooldown} seconds before broadcasting again`);
+    }
+    
+    // Validate message length
+    if (!message || message.trim().length === 0) {
+      throw new Error("Broadcast message cannot be empty");
+    }
+    
+    if (message.length > 200) {
+      throw new Error("Broadcast message too long (max 200 characters)");
+    }
+    
+    let deliveredCount = 0;
+    const broadcastMessage = `Message broadcasted: "${message}"`;
+    
+    this.logger.info(`📢 Broadcasting message from ${senderUserId}: "${message}"`);
+    
+    // Update last broadcast time
+    this.lastBroadcastTime.set(senderUserId, Date.now());
+    
+    // Get all active users except the sender
+    const recipients = Array.from(this.activeUsers.entries())
+      .filter(([userId]) => userId !== senderUserId);
+    
+    if (recipients.length === 0) {
+      this.logger.info(`📢 No other devices connected for broadcast from ${senderUserId}`);
+      return 0;
+    }
+    
+    // Get sessions for all recipients
+    const deliveryPromises = recipients.map(async ([userId, userInfo]) => {
+      try {
+        // Find the listening state which contains the session
+        const listeningState = this.listeningStates.get(userId);
+        if (!listeningState?.session) {
+          this.logger.warn(`📢 No session found for user ${userId}, skipping broadcast`);
+          return false;
+        }
+        
+        const session = listeningState.session;
+        
+        // Broadcast with retry mechanism
+        const result = await Promise.race([
+          session.audio.speak(broadcastMessage),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Broadcast TTS timeout')), 8000)
+          )
+        ]) as any;
+        
+        if (result.success) {
+          this.logger.info(`📢 Broadcast delivered to user ${userId}`);
+          
+          // Also show visual feedback
+          session.layouts.showTextWall(broadcastMessage, { durationMs: 5000 });
+          
+          // Send SSE notification for webview
+          this.broadcastSSE(userId, {
+            type: 'broadcast-received',
+            message: message,
+            sender: senderUserId,
+            timestamp: Date.now()
+          });
+          
+          return true;
+        } else {
+          throw new Error(result.error || 'TTS failed');
+        }
+        
+      } catch (error) {
+        this.logger.warn(`📢 Failed to deliver broadcast to user ${userId}:`, error);
+        return false;
+      }
+    });
+    
+    // Execute all deliveries in parallel
+    const results = await Promise.allSettled(deliveryPromises);
+    deliveredCount = results.filter(result => 
+      result.status === 'fulfilled' && result.value === true
+    ).length;
+    
+    this.logger.info(`📢 Broadcast completed: ${deliveredCount}/${recipients.length} devices reached`);
+    return deliveredCount;
+  }
+
+  /**
    * OPTIMIZED: Faster wake word detection
    */
   private detectWakeWord(text: string): boolean {
@@ -1657,9 +1864,30 @@ Give a helpful 1-2 sentence response for text-to-speech.`;
     
       // Aggressive Slurring or Accentual Variants
       "h'mentra", 'aymentra', 'aymenta', 'hemtra', 'hementa', 'ammentra',
-      'yamentra', 'h’mentra', 'aymentrah', 'haimen'
+      'yamentra', 'aymentrah', 'haimen'
     ];
     return wakeWords.some(word => text.includes(word));
+  }
+
+  /**
+   * Detect echo/broadcast commands
+   */
+  private detectEchoCommand(text: string): { isEcho: boolean; message?: string } {
+    const echoPatterns = [
+      'echo ', 'broadcast ', 'say to everyone ', 'tell everyone ', 'announce '
+    ];
+    
+    for (const pattern of echoPatterns) {
+      const index = text.indexOf(pattern);
+      if (index !== -1) {
+        const message = text.substring(index + pattern.length).trim();
+        if (message) {
+          return { isEcho: true, message };
+        }
+      }
+    }
+    
+    return { isEcho: false };
   }
 
   /**
